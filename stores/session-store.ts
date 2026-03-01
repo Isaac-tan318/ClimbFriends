@@ -1,0 +1,82 @@
+import { create } from 'zustand';
+import { ClimbingSession, UserStats } from '@/types';
+import { MOCK_SESSIONS, CURRENT_USER_STATS, getUserSessions } from '@/data';
+
+interface SessionState {
+  sessions: ClimbingSession[];
+  stats: UserStats;
+  activeSession: ClimbingSession | null;
+  
+  // Actions
+  startSession: (gymId: string) => void;
+  endSession: () => void;
+  addSession: (session: ClimbingSession) => void;
+  getUserSessions: (userId: string) => ClimbingSession[];
+  getRecentSessions: (limit?: number) => ClimbingSession[];
+}
+
+export const useSessionStore = create<SessionState>((set, get) => ({
+  sessions: MOCK_SESSIONS,
+  stats: CURRENT_USER_STATS,
+  activeSession: null,
+  
+  startSession: (gymId) => {
+    const newSession: ClimbingSession = {
+      id: `session-${Date.now()}`,
+      oderId: 'user-1',
+      gymId,
+      startedAt: new Date(),
+      endedAt: null,
+      durationMinutes: 0,
+      isActive: true,
+    };
+    
+    set({ activeSession: newSession });
+  },
+  
+  endSession: () => {
+    const { activeSession, sessions, stats } = get();
+    if (!activeSession) return;
+    
+    const endedAt = new Date();
+    const durationMinutes = Math.round(
+      (endedAt.getTime() - activeSession.startedAt.getTime()) / 60000
+    );
+    
+    const completedSession: ClimbingSession = {
+      ...activeSession,
+      endedAt,
+      durationMinutes,
+      isActive: false,
+    };
+    
+    set({
+      activeSession: null,
+      sessions: [completedSession, ...sessions],
+      stats: {
+        ...stats,
+        totalMinutes: stats.totalMinutes + durationMinutes,
+        totalSessions: stats.totalSessions + 1,
+        minutesThisWeek: stats.minutesThisWeek + durationMinutes,
+        sessionsThisWeek: stats.sessionsThisWeek + 1,
+      },
+    });
+  },
+  
+  addSession: (session) => {
+    set((state) => ({
+      sessions: [session, ...state.sessions],
+    }));
+  },
+  
+  getUserSessions: (userId) => {
+    return get().sessions.filter((s) => s.oderId === userId);
+  },
+  
+  getRecentSessions: (limit = 10) => {
+    return get()
+      .sessions.filter((s) => s.oderId === 'user-1')
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+      .slice(0, limit);
+  },
+}));
