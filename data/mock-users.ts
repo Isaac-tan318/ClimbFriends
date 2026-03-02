@@ -4,7 +4,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-1',
     email: 'alex@climbfriend.sg',
-    displayName: 'Alex Climber',
+    displayName: 'Isaac Tan',
     createdAt: new Date('2024-06-01'),
   },
   {
@@ -51,7 +51,7 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export const CURRENT_USER = MOCK_USERS[0]; // Alex Climber
+export const CURRENT_USER = MOCK_USERS[0]; // Isaac Tan
 
 export const CURRENT_USER_SETTINGS: UserSettings = {
   userId: CURRENT_USER.id,

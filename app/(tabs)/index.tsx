@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image } from 'react-native';
 import { format, formatDistanceToNow } from 'date-fns';
 
 import { ThemedText } from '@/components/themed-text';
@@ -9,6 +9,7 @@ import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS } from '@/data';
 import { CURRENT_USER } from '@/data';
+import { ClimbingSession, Friend } from '@/types';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -40,6 +41,28 @@ function formatElapsed(totalSeconds: number): string {
   const s = totalSeconds % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function formatDurationMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
+function formatClockWithDot(value: Date): string {
+  return format(value, 'h:mm').replace(':', '.');
+}
+
+function formatOrdinal(value: number): string {
+  const tens = value % 100;
+  if (tens >= 11 && tens <= 13) return `${value}th`;
+  const ones = value % 10;
+  if (ones === 1) return `${value}st`;
+  if (ones === 2) return `${value}nd`;
+  if (ones === 3) return `${value}rd`;
+  return `${value}th`;
 }
 
 function ActiveSessionCard({
@@ -101,7 +124,100 @@ function IdleSessionCard({ onStart }: { onStart: () => void }) {
         Start a session manually or let auto-detect find your gym
       </ThemedText>
       <Pressable style={styles.startButton} onPress={onStart}>
-        <ThemedText style={styles.startButtonText}>Start Session</ThemedText>
+        <ThemedText style={styles.startButtonText}>Start Climbing!</ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
+function SessionSummaryCard({
+  session,
+  sessionsThisWeek,
+  climbedWith,
+}: {
+  session: ClimbingSession;
+  sessionsThisWeek: number;
+  climbedWith: Friend[];
+}) {
+  const gym = getGymById(session.gymId);
+  const startedTime = formatClockWithDot(session.startedAt);
+  const endedTime = session.endedAt ? formatClockWithDot(session.endedAt) : '-';
+  const location = gym?.name || 'Unknown location';
+  const gymLogoText = (gym?.brand || gym?.name || 'Gym')
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const climbsLogged = 0;
+
+  return (
+    <View style={styles.summaryCard}>
+      <View style={styles.summaryHeaderRow}>
+        {gym?.imageUrl ? (
+          <Image source={{ uri: gym.imageUrl }} style={styles.summaryLogo} />
+        ) : (
+          <View style={styles.summaryLogoFallback}>
+            <ThemedText style={styles.summaryLogoText}>{gymLogoText}</ThemedText>
+          </View>
+        )}
+        <View style={styles.summaryHeaderText}>
+          <ThemedText style={styles.summarySubtitle} numberOfLines={2}>
+            {location}
+          </ThemedText>
+        </View>
+      </View>
+      <ThemedText style={styles.summaryTitle}>
+        You climbed from {startedTime} to {endedTime}!
+      </ThemedText>
+      <View style={styles.summaryMetricsRow}>
+        <View style={styles.summaryMetric}>
+          <ThemedText style={styles.summaryMetricLabel}>Time</ThemedText>
+          <ThemedText style={styles.summaryMetricValue}>
+            {formatDurationMinutes(session.durationMinutes)}
+          </ThemedText>
+        </View>
+        <View style={styles.summaryMetric}>
+          <ThemedText style={styles.summaryMetricLabel} numberOfLines={1}>
+            Climb this week
+          </ThemedText>
+          <ThemedText style={styles.summaryMetricValue}>{formatOrdinal(sessionsThisWeek)}</ThemedText>
+        </View>
+        <View style={styles.summaryMetric}>
+          <ThemedText style={styles.summaryMetricLabel}>Climbs logged</ThemedText>
+          <ThemedText style={styles.summaryMetricValue}>{climbsLogged}</ThemedText>
+        </View>
+      </View>
+      {climbedWith.length > 0 && (
+        <View style={styles.climbedWithRow}>
+          <ThemedText style={styles.climbedWithLabel}>Climbed with</ThemedText>
+          <View style={styles.climbedWithFriends}>
+            {climbedWith.map((friend) => (
+              <View key={friend.id} style={styles.climbedWithFriend}>
+                {friend.avatarUrl ? (
+                  <Image source={{ uri: friend.avatarUrl }} style={styles.climbedWithAvatar} />
+                ) : (
+                  <View style={styles.climbedWithAvatarFallback}>
+                    <ThemedText style={styles.climbedWithAvatarText}>
+                      {friend.displayName
+                        .split(' ')
+                        .map((w) => w[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </ThemedText>
+                  </View>
+                )}
+                <ThemedText style={styles.climbedWithName} numberOfLines={1}>
+                  {friend.displayName.split(' ')[0]}
+                </ThemedText>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+      <Pressable style={styles.summaryLogClimbButton} onPress={() => undefined}>
+        <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
       </Pressable>
     </View>
   );
@@ -197,8 +313,19 @@ export default function HomeScreen() {
   const endSession = useSessionStore((state) => state.endSession);
   const allSessions = useSessionStore((state) => state.sessions);
   const plannedVisits = useSocialStore((state) => state.plannedVisits);
+  const friends = useSocialStore((state) => state.friends);
 
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
+  const mostRecentCompletedSession = useMemo(() => {
+    return allSessions
+      .filter((s) => s.oderId === 'user-1' && !s.isActive && s.endedAt)
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null;
+  }, [allSessions]);
+
+  const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
+  const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
+
+  const displayedSummarySession = lastEndedSession;
 
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
 
@@ -221,12 +348,28 @@ export default function HomeScreen() {
       .slice(0, 2);
   }, [plannedVisits]);
 
+  useEffect(() => {
+    if (previousActiveSessionRef.current && !activeSession) {
+      const endedSession = allSessions.find(
+        (session) =>
+          session.id === previousActiveSessionRef.current?.id && !session.isActive,
+      );
+
+      if (endedSession) {
+        setLastEndedSession(endedSession);
+      }
+    }
+
+    previousActiveSessionRef.current = activeSession;
+  }, [activeSession, allSessions]);
+
   const handleStartSession = useCallback(() => {
     setGymPickerVisible(true);
   }, []);
 
   const handleGymSelect = useCallback(
     (gymId: string) => {
+      setLastEndedSession(null);
       startSession(gymId);
       setGymPickerVisible(false);
     },
@@ -263,6 +406,17 @@ export default function HomeScreen() {
               elapsed={elapsed}
               onEnd={handleEndSession}
             />
+          ) : lastEndedSession ? (
+            <>
+              <SessionSummaryCard
+                session={lastEndedSession}
+                sessionsThisWeek={stats.sessionsThisWeek}
+                climbedWith={friends.slice(0, 3)}
+              />
+              <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
+                <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
+              </Pressable>
+            </>
           ) : (
             <IdleSessionCard onStart={handleStartSession} />
           )}
@@ -403,7 +557,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timerText: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '300',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
@@ -490,6 +644,137 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: '700',
+  },
+  summaryCard: {
+    marginTop: 8,
+    marginBottom: 32,
+    marginLeft: 8,
+  },
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLogo: {
+    width: 75,
+    height: 75,
+    borderRadius: 9999,
+    marginRight: 12,
+  },
+  summaryLogoFallback: {
+    width: 50,
+    height: 50,
+    borderRadius: 9999,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  summaryLogoText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  summaryHeaderText: {
+    flex: 1,
+  },
+
+  summarySubtitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  summaryMetricsRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    gap: 48,
+  },
+  summaryMetric: {
+    alignItems: 'flex-start',
+  },
+  summaryMetricLabel: {
+    fontSize: 13,
+    opacity: 0.55,
+    marginBottom: 2,
+  },
+  summaryMetricValue: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  climbedWithRow: {
+    marginTop: 24,
+  },
+  climbedWithLabel: {
+    fontSize: 14,
+    opacity: 0.55,
+    marginBottom: 8,
+  },
+  climbedWithFriends: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  climbedWithFriend: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  climbedWithAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  climbedWithAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e0e7ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  climbedWithAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4338ca',
+  },
+  climbedWithName: {
+    fontSize: 13,
+    fontWeight: '500',
+    maxWidth: 64,
+    textAlign: 'center',
+  },
+  summaryLogClimbButton: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: '#0a7ea4',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newSessionButton: {
+    marginTop: 16,
+    backgroundColor: '#22c55e',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  newSessionButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  summaryLogClimbButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  summaryTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 8,
   },
 
   /* Gym picker modal */
