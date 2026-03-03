@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, ScrollView, View, Pressable, Image } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 
+import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -89,6 +90,7 @@ export default function FriendsScreen() {
   
   return (
     <ThemedView style={styles.container}>
+      <AppHeaderBanner title="Friends" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
@@ -132,7 +134,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 24,
   },
   header: {
     marginBottom: 16,

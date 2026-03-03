@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, ScrollView, View, Pressable, TextInput } from 'react-native';
 
+import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -62,6 +63,7 @@ export default function GymsScreen() {
   
   return (
     <ThemedView style={styles.container}>
+      <AppHeaderBanner title="Gyms" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 24,
   },
   header: {
     marginBottom: 20,

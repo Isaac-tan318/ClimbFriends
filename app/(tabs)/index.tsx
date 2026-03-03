@@ -2,17 +2,16 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {Device} from '@/constants/device';
 import { AppColors } from '@/constants/theme';
 
+import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS } from '@/data';
-import { CURRENT_USER } from '@/data';
 import { ClimbingSession, Friend } from '@/types';
 
 function useElapsedTime(startedAt: Date | null) {
@@ -705,20 +704,9 @@ export default function HomeScreen() {
     ? `Come climb with me at ${inviteGymName} right now!`
     : `Come climb with me at ${inviteGymName}`;
 
-  const insets = useSafeAreaInsets();
-
   return (
     <ThemedView style={styles.container}>
-      {/* Header Banner */}
-      <View style={[styles.headerBanner, { paddingTop: insets.top + 10 }]}>
-        <View>
-          <ThemedText type="title" style={{ color: '#ffffff', fontSize: 24 }}>Home</ThemedText>
-        </View>
-        <View style={styles.streakBadge}>
-          <ThemedText style={styles.streakEmoji}>🔥</ThemedText>
-          <ThemedText style={styles.streakText}>{stats.currentStreak}w streak</ThemedText>
-        </View>
-      </View>
+      <AppHeaderBanner title="Home" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Current Session */}
@@ -812,31 +800,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingTop: 24,
-  },
-  headerBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    backgroundColor: '#1c1c1e', // Dark gray banner background
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  streakEmoji: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  streakText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#92400e',
   },
   section: {
     marginBottom: 24,
@@ -1450,3 +1413,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
+
