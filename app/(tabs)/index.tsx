@@ -272,7 +272,7 @@ function GymPickerModal({
   const dismissModal = useCallback(() => {
     Animated.parallel([
       Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 100, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
     ]).start(() => {
       onCloseRef.current();
     });
