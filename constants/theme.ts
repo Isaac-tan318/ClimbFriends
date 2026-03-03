@@ -8,6 +8,44 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+/**
+ * App brand colors derived from current design usage:
+ * - Primary (teal): Main CTAs — Log Climb, Start Climbing, tint
+ * - Secondary (green): Live/active states — Live Session, New Session, Invite Now, online dots
+ * - Tertiary (indigo): Social features — Make a Plan, Send, selected chips, checkmarks
+ */
+export const AppColors = {
+  primary:  '#6366f1',
+  primaryLight: '#e0f2fe',
+  secondary: '#22c55e',
+  secondaryLight: '#dcfce7',
+  tertiary: '#4f46e5',
+  tertiaryLight: '#e0e7ff',
+  danger: '#dc2626',
+  warning: '#f59e0b',
+  warningLight: '#fef3c7',
+  warningDark: '#92400e',
+  surface: {
+    light: '#f9fafb',
+    dark: '#1a1a1a',
+  },
+  border: {
+    light: '#e5e5e5',
+    dark: '#333333',
+  },
+  input: {
+    light: '#f3f4f6',
+    dark: '#2a2a2a',
+  },
+  banner: '#1c1c1e',
+  avatarFallbackBg: '#e0e7ff',
+  avatarFallbackText: '#4338ca',
+  textMuted: {
+    light: '#374151',
+    dark: '#e5e7eb',
+  },
+};
+
 export const Colors = {
   light: {
     text: '#11181C',

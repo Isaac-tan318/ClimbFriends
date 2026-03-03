@@ -2,6 +2,8 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder } from 'react-native';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {Device} from '@/constants/device';
+import { AppColors } from '@/constants/theme';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -250,13 +252,31 @@ function GymPickerModal({
 }) {
   const modalBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const translateY = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(800)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (visible) translateY.setValue(0);
-  }, [visible, translateY]);
+    if (visible) {
+      translateY.setValue(800);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0,  overshootClamping: true,
+ useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible, translateY, backdropOpacity]);
+
+  const dismissModal = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 100, useNativeDriver: true }),
+    ]).start(() => {
+      onCloseRef.current();
+    });
+  }, [translateY, backdropOpacity]);
 
   const panResponder = useMemo(
     () =>
@@ -267,28 +287,28 @@ function GymPickerModal({
           if (gs.dy > 0) translateY.setValue(gs.dy);
         },
         onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 100 || gs.vy > 0.5) {
-            Animated.timing(translateY, { toValue: 800, duration: 200, useNativeDriver: true }).start(() => {
-              onCloseRef.current();
-              translateY.setValue(0);
-            });
+          if (gs.dy > 500 || gs.vy > 0.5) {
+            dismissModal();
           } else {
             Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
           }
         },
       }),
-    [translateY],
+    [translateY, dismissModal],
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={dismissModal}>
       <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
+        </Animated.View>
         <Animated.View style={[styles.modalContent, { backgroundColor: modalBg, transform: [{ translateY }] }]}>
           <View {...panResponder.panHandlers}>
             <View style={styles.bottomSheetHandle} />
           </View>
           <View style={styles.modalHeader}>
-            <Pressable onPress={onClose} style={styles.backButton}>
+            <Pressable onPress={dismissModal} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
             <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
@@ -308,6 +328,7 @@ function GymPickerModal({
             )}
           />
         </Animated.View>
+
       </View>
     </Modal>
   );
@@ -357,7 +378,8 @@ function FriendPickerModal({
   const [message, setMessage] = useState(defaultMessage);
   const [planDate, setPlanDate] = useState<Date | null>(null);
   const [planTime, setPlanTime] = useState<string | null>(null);
-  const translateY = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(800)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -368,9 +390,23 @@ function FriendPickerModal({
       setMessage(defaultMessage);
       setPlanDate(null);
       setPlanTime(null);
-      translateY.setValue(0);
+      translateY.setValue(800);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start();
     }
-  }, [visible, defaultMessage, translateY]);
+  }, [visible, defaultMessage, translateY, backdropOpacity]);
+
+  const dismissModal = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => {
+      onCloseRef.current();
+    });
+  }, [translateY, backdropOpacity]);
 
   const filteredFriends = useMemo(() => {
     if (!searchQuery.trim()) return friends;
@@ -420,22 +456,22 @@ function FriendPickerModal({
           if (gs.dy > 0) translateY.setValue(gs.dy);
         },
         onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 100 || gs.vy > 0.5) {
-            Animated.timing(translateY, { toValue: 800, duration: 200, useNativeDriver: true }).start(() => {
-              onCloseRef.current();
-              translateY.setValue(0);
-            });
+          if (gs.dy > 400 || gs.vy > 0.5) {
+            dismissModal();
           } else {
             Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
           }
         },
       }),
-    [translateY],
+    [translateY, dismissModal],
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={dismissModal}>
       <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
+        </Animated.View>
         <Animated.View style={[styles.friendPickerContent, { backgroundColor: modalBg, transform: [{ translateY }] }]}>
           {/* Handle bar */}
           <View {...panResponder.panHandlers}>
@@ -444,7 +480,7 @@ function FriendPickerModal({
 
           {/* Search bar */}
           <View style={styles.friendPickerSearchRow}>
-            <Pressable onPress={onClose} style={styles.backButton}>
+            <Pressable onPress={dismissModal} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
             <View style={[styles.friendPickerSearchBar, { backgroundColor: inputBg }]}>
@@ -672,9 +708,6 @@ export default function HomeScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Current Session */}
         <View style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Current Session
-          </ThemedText>
           {activeSession ? (
             <ActiveSessionCard
               gymName={activeGym?.name || 'Unknown Gym'}
@@ -701,15 +734,13 @@ export default function HomeScreen() {
         {/* Invite Friends */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Invite Friends
+            Invite Friends to Climb
           </ThemedText>
           <View style={styles.inviteButtonsRow}>
             <Pressable style={styles.inviteNowButton} onPress={handleInviteNow}>
-              <ThemedText style={styles.inviteNowEmoji}>⚡</ThemedText>
-              <ThemedText style={styles.inviteNowText}>Invite Now</ThemedText>
+              <ThemedText style={styles.inviteNowText}>Invite Now ⚡</ThemedText>
             </Pressable>
             <Pressable style={styles.makePlanButton} onPress={handleMakePlan}>
-              <ThemedText style={styles.makePlanEmoji}>📅</ThemedText>
               <ThemedText style={styles.makePlanText}>Make a Plan</ThemedText>
             </Pressable>
           </View>
@@ -845,6 +876,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 40,
+    lineHeight: 44,
     fontWeight: '300',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
@@ -890,7 +922,7 @@ const styles = StyleSheet.create({
   },
   logClimbButton: {
     flex: 1,
-    backgroundColor: '#0a7ea4',
+    backgroundColor: AppColors.primary,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -1061,7 +1093,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   summaryTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     marginTop: 20,
     marginBottom: 4,
@@ -1070,8 +1102,11 @@ const styles = StyleSheet.create({
   /* Gym picker modal */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
     maxHeight: '70%',
@@ -1175,9 +1210,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  inviteNowEmoji: {
-    fontSize: 24,
-  },
   inviteNowText: {
     fontSize: 15,
     fontWeight: '700',
@@ -1190,9 +1222,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     gap: 4,
-  },
-  makePlanEmoji: {
-    fontSize: 24,
   },
   makePlanText: {
     fontSize: 15,
