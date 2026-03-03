@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {Device} from '@/constants/device';
@@ -54,8 +55,8 @@ function formatDurationMinutes(totalMinutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
-function formatClockWithDot(value: Date): string {
-  return format(value, 'h:mm').replace(':', '.');
+function formatClock(value: Date): string {
+  return format(value, 'h:mm a').toLowerCase();
 }
 
 function formatOrdinal(value: number): string {
@@ -158,8 +159,8 @@ function SessionSummaryCard({
   climbedWith: Friend[];
 }) {
   const gym = getGymById(session.gymId);
-  const startedTime = formatClockWithDot(session.startedAt);
-  const endedTime = session.endedAt ? formatClockWithDot(session.endedAt) : '-';
+  const startedTime = formatClock(session.startedAt);
+  const endedTime = session.endedAt ? formatClock(session.endedAt) : '-';
   const location = gym?.name || 'Unknown location';
   const gymLogoText = (gym?.brand || gym?.name || 'Gym')
     .split(' ')
@@ -234,9 +235,6 @@ function SessionSummaryCard({
           </View>
         </View>
       )}
-      <Pressable style={styles.summaryLogClimbButton} onPress={() => undefined}>
-        <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
-      </Pressable>
     </View>
   );
 }
@@ -601,6 +599,24 @@ function FriendPickerModal({
   );
 }
 
+function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onMakePlan: () => void }) {
+  const scheme = useColorScheme();
+  const surfaceBg = scheme === 'dark' ? AppColors.surfaceContainer.dark : AppColors.surfaceContainer.light;
+
+  return (
+    <View style={styles.inviteButtonsRow}>
+      <Pressable style={[styles.inviteBox, { backgroundColor: surfaceBg }]} onPress={onInviteNow}>
+        <MaterialIcons name="bolt" size={32} color={AppColors.primary} />
+        <ThemedText style={styles.inviteBoxText}>Invite Now</ThemedText>
+      </Pressable>
+      <Pressable style={[styles.inviteBox, { backgroundColor: surfaceBg }]} onPress={onMakePlan}>
+        <MaterialIcons name="event" size={32} color={AppColors.primary} />
+        <ThemedText style={styles.inviteBoxText}>Make a Plan</ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
@@ -696,8 +712,7 @@ export default function HomeScreen() {
       {/* Header Banner */}
       <View style={[styles.headerBanner, { paddingTop: insets.top + 10 }]}>
         <View>
-          <ThemedText style={[styles.greeting, { color: '#e5e7eb' }]}>Welcome back,</ThemedText>
-          <ThemedText type="title" style={{ color: '#ffffff' }}>{CURRENT_USER.displayName.split(' ')[0]}</ThemedText>
+          <ThemedText type="title" style={{ color: '#ffffff', fontSize: 24 }}>Home</ThemedText>
         </View>
         <View style={styles.streakBadge}>
           <ThemedText style={styles.streakEmoji}>🔥</ThemedText>
@@ -722,28 +737,28 @@ export default function HomeScreen() {
                 sessionsThisWeek={stats.sessionsThisWeek}
                 climbedWith={friends.slice(0, 3)}
               />
-              <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
-                <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
-              </Pressable>
+              <View style={styles.summaryActionsRow}>
+                <Pressable style={styles.summaryLogClimbButton}>
+                  <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
+                </Pressable>
+                <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
+                  <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
+                </Pressable>
+              </View>
             </>
           ) : (
             <IdleSessionCard onStart={handleStartSession} />
           )}
         </View>
 
+        <View style={styles.sectionDivider} />
+
         {/* Invite Friends */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Invite Friends to Climb
           </ThemedText>
-          <View style={styles.inviteButtonsRow}>
-            <Pressable style={styles.inviteNowButton} onPress={handleInviteNow}>
-              <ThemedText style={styles.inviteNowText}>Invite Now ⚡</ThemedText>
-            </Pressable>
-            <Pressable style={styles.makePlanButton} onPress={handleMakePlan}>
-              <ThemedText style={styles.makePlanText}>Make a Plan</ThemedText>
-            </Pressable>
-          </View>
+          <InviteBoxes onInviteNow={handleInviteNow} onMakePlan={handleMakePlan} />
 
           {/* Upcoming Plans */}
           {upcomingPlans.length > 0 && (
@@ -804,12 +819,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: '#1c1c1e', // Dark gray banner background
     paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  greeting: {
-    fontSize: 16,
-    opacity: 0.8,
-    marginBottom: 4,
+    paddingBottom: 10,
   },
   streakBadge: {
     flexDirection: 'row',
@@ -831,8 +841,15 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth * 10,
+    backgroundColor: '#000000',
+    marginTop: 16,
+    marginBottom: 32,
+    marginHorizontal: -20,
+  },
   sectionTitle: {
-    marginBottom: 12,
+    marginBottom: 24,
   },
 
   /* Active session */
@@ -969,7 +986,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     marginTop: 8,
-    marginBottom: 32,
+    marginBottom: 24,
     marginLeft: 8,
   },
   summaryHeaderRow: {
@@ -1004,6 +1021,7 @@ const styles = StyleSheet.create({
   summarySubtitle: {
     fontSize: 20,
     fontWeight: '600',
+    marginLeft: 8,
   },
   summaryMetricsRow: {
     flexDirection: 'row',
@@ -1011,6 +1029,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
     gap: 48,
+    marginBottom: 32,
   },
   summaryMetric: {
     alignItems: 'flex-start',
@@ -1065,22 +1084,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   summaryLogClimbButton: {
-    marginTop: 14,
-    alignSelf: 'flex-start',
+    flex: 1,
     backgroundColor: '#0a7ea4',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   newSessionButton: {
-    marginTop: 16,
-    backgroundColor: '#22c55e',
+    flex: 1,
+    backgroundColor: AppColors.primary,
     paddingVertical: 14,
-    paddingHorizontal: 32,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   newSessionButtonText: {
     color: 'white',
@@ -1202,31 +1223,19 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 16,
   },
-  inviteNowButton: {
+  inviteBox: {
     flex: 1,
-    backgroundColor: '#22c55e',
-    paddingVertical: 18,
+    height: 110,
     borderRadius: 14,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.15)',
   },
-  inviteNowText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'white',
-  },
-  makePlanButton: {
-    flex: 1,
-    backgroundColor: '#6366f1',
-    paddingVertical: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    gap: 4,
-  },
-  makePlanText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'white',
+  inviteBoxText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 
   /* Friend picker modal */

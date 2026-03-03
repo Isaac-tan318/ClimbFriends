@@ -29,6 +29,10 @@ export const AppColors = {
     light: '#f9fafb',
     dark: '#1a1a1a',
   },
+  surfaceContainer: {
+    light: '#f0ecf4',
+    dark: '#2a292f',
+  },
   border: {
     light: '#e5e5e5',
     dark: '#333333',
