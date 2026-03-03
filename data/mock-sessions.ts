@@ -36,7 +36,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   {
     id: 'session-3',
     oderId: 'user-1',
-    gymId: 'boulder-plus-bukit-timah',
+    gymId: 'boulder-plus-chevrons',
     startedAt: daysAgo(5, 10, 0),
     endedAt: sessionDuration(daysAgo(5, 10, 0), 75),
     durationMinutes: 75,
@@ -45,7 +45,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   {
     id: 'session-4',
     oderId: 'user-1',
-    gymId: 'fitbloc-kent-ridge',
+    gymId: 'fitbloc-depot',
     startedAt: daysAgo(8, 17, 0),
     endedAt: sessionDuration(daysAgo(8, 17, 0), 105),
     durationMinutes: 105,
@@ -73,7 +73,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   {
     id: 'session-7',
     oderId: 'user-2',
-    gymId: 'boulder-planet-tai-seng',
+    gymId: 'boulder-planet-taiseng',
     startedAt: daysAgo(4, 18, 30),
     endedAt: sessionDuration(daysAgo(4, 18, 30), 95),
     durationMinutes: 95,
@@ -102,7 +102,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   {
     id: 'session-10',
     oderId: 'user-4',
-    gymId: 'bff-climb-bukit-timah',
+    gymId: 'bff-climb-bendemeer',
     startedAt: daysAgo(1, 9, 0),
     endedAt: sessionDuration(daysAgo(1, 9, 0), 100),
     durationMinutes: 100,

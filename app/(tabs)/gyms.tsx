@@ -1,31 +1,32 @@
 import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, TextInput } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Pressable,
+  ScrollView,
+  TextInput,
+  Image,
+} from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useSocialStore } from '@/stores';
 import { SINGAPORE_GYMS } from '@/data';
-import { Gym } from '@/types';
+import { Gym, Friend } from '@/types';
+import { AppColors } from '@/constants/theme';
+import { GymMapTab } from '@/components/gym-map-tab';
+import { GymDrawer, BRAND_COLORS } from '@/components/gym-drawer';
+
+// ─── Gym Card ─────────────────────────────────────────────────────────────────
 
 function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
   const cardBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const brandColors: Record<string, string> = {
-    'Boulder+': '#f97316',
-    'Boulder Planet': '#8b5cf6',
-    'Climb Central': '#3b82f6',
-    'BFF Climb': '#ec4899',
-    'FitBloc': '#10b981',
-    'Lighthouse': '#f59e0b',
-    'Outpost': '#6366f1',
-    'Climba': '#14b8a6',
-    'Oyeyo': '#ef4444',
-    'Z-Vertigo': '#8b5cf6',
-  };
-  
-  const brandColor = brandColors[gym.brand] || '#6b7280';
-  
+  const brandColor = BRAND_COLORS[gym.brand] ?? '#6b7280';
+
   return (
     <Pressable onPress={onPress}>
       <View style={[styles.gymCard, { backgroundColor: cardBg, borderColor }]}>
@@ -44,35 +45,31 @@ function GymCard({ gym, onPress }: { gym: Gym; onPress: () => void }) {
   );
 }
 
-export default function GymsScreen() {
+// ─── Gyms Tab ─────────────────────────────────────────────────────────────────
+
+function GymsTab({ friends }: { friends: Friend[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
-  
+  const [selectedGym, setSelectedGym] = useState<Gym | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+
   const inputBg = useThemeColor({ light: '#f5f5f5', dark: '#262626' }, 'background');
   const textColor = useThemeColor({}, 'text');
-  
+
   const brands = [...new Set(SINGAPORE_GYMS.map((g) => g.brand))];
-  
+
   const filteredGyms = SINGAPORE_GYMS.filter((gym) => {
-    const matchesSearch = gym.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      gym.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       gym.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
       gym.address.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesBrand = !selectedBrand || gym.brand === selectedBrand;
     return matchesSearch && matchesBrand;
   });
-  
+
   return (
-    <ThemedView style={styles.container}>
-      <AppHeaderBanner title="Gyms" />
+    <View style={{ flex: 1 }}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <ThemedText type="title">Gyms</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            {SINGAPORE_GYMS.length} climbing gyms in Singapore
-          </ThemedText>
-        </View>
-        
         {/* Search */}
         <View style={[styles.searchContainer, { backgroundColor: inputBg }]}>
           <ThemedText style={styles.searchIcon}>🔍</ThemedText>
@@ -84,56 +81,49 @@ export default function GymsScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
-        
+
         {/* Brand Filter */}
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.filterScroll}
           contentContainerStyle={styles.filterContainer}
         >
           <Pressable
-            style={[
-              styles.filterChip,
-              !selectedBrand && styles.filterChipActive,
-            ]}
+            style={[styles.filterChip, !selectedBrand && styles.filterChipActive]}
             onPress={() => setSelectedBrand(null)}
           >
-            <ThemedText style={[
-              styles.filterChipText,
-              !selectedBrand && styles.filterChipTextActive,
-            ]}>All</ThemedText>
+            <ThemedText style={[styles.filterChipText, !selectedBrand && styles.filterChipTextActive]}>
+              All
+            </ThemedText>
           </Pressable>
           {brands.map((brand) => (
             <Pressable
               key={brand}
-              style={[
-                styles.filterChip,
-                selectedBrand === brand && styles.filterChipActive,
-              ]}
+              style={[styles.filterChip, selectedBrand === brand && styles.filterChipActive]}
               onPress={() => setSelectedBrand(selectedBrand === brand ? null : brand)}
             >
-              <ThemedText style={[
-                styles.filterChipText,
-                selectedBrand === brand && styles.filterChipTextActive,
-              ]}>{brand}</ThemedText>
+              <ThemedText style={[styles.filterChipText, selectedBrand === brand && styles.filterChipTextActive]}>
+                {brand}
+              </ThemedText>
             </Pressable>
           ))}
         </ScrollView>
-        
+
         {/* Gym List */}
         <View style={styles.gymList}>
           {filteredGyms.map((gym) => (
-            <GymCard 
-              key={gym.id} 
-              gym={gym} 
+            <GymCard
+              key={gym.id}
+              gym={gym}
               onPress={() => {
-                // TODO: Navigate to gym detail
-              }} 
+                setSelectedGym(gym);
+                setDrawerVisible(true);
+              }}
             />
           ))}
         </View>
-        
+
         {filteredGyms.length === 0 && (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyEmoji}>🔍</ThemedText>
@@ -141,28 +131,91 @@ export default function GymsScreen() {
           </View>
         )}
       </ScrollView>
+
+      <GymDrawer
+        gym={selectedGym}
+        friends={friends}
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+      />
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+export default function GymsScreen() {
+  const [activeTab, setActiveTab] = useState<'map' | 'gyms'>('map');
+  const friends = useSocialStore((state) => state.friends);
+  const tabBg = useThemeColor({}, 'background');
+  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#2a2a2a' }, 'background');
+
+  return (
+    <ThemedView style={styles.container}>
+      <AppHeaderBanner title="Gyms" />
+
+      {/* Top Tabs */}
+      <View style={[styles.topTabs, { backgroundColor: tabBg, borderBottomColor: borderColor }]}>
+        {(['map', 'gyms'] as const).map((tab) => (
+          <Pressable key={tab} style={styles.topTab} onPress={() => setActiveTab(tab)}>
+            <ThemedText style={[styles.topTabText, activeTab === tab && styles.topTabTextActive]}>
+              {tab === 'map' ? 'Map' : 'Gyms'}
+            </ThemedText>
+            {activeTab === tab && <View style={styles.topTabIndicator} />}
+          </Pressable>
+        ))}
+      </View>
+
+      {activeTab === 'map' ? <GymMapTab friends={friends} /> : <GymsTab friends={friends} />}
     </ThemedView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+
+  /* Top tabs */
+  topTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  topTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  topTabText: {
+    fontSize: 15,
+    fontWeight: '500',
+    opacity: 0.45,
+  },
+  topTabTextActive: {
+    opacity: 1,
+    fontWeight: '700',
+    color: AppColors.primary,
+  },
+  topTabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: AppColors.primary,
+  },
+
+  /* Gyms list tab */
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 24,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  subtitle: {
-    fontSize: 14,
-    opacity: 0.6,
-    marginTop: 4,
+    paddingTop: 20,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -196,7 +249,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
   },
   filterChipActive: {
-    backgroundColor: '#0a7ea4',
+    backgroundColor: AppColors.primary,
   },
   filterChipText: {
     fontSize: 13,

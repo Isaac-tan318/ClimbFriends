@@ -48,7 +48,7 @@ export const MOCK_PLANNED_VISITS: PlannedVisit[] = [
   {
     id: 'plan-3',
     userId: 'user-1',
-    gymId: 'fitbloc-kentridge',
+    gymId: 'fitbloc-depot',
     plannedDate: daysFromNow(7, 10, 0), // 1 week from now at 10am
     createdAt: new Date(),
     invitees: [],
