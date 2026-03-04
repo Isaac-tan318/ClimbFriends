@@ -33,10 +33,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="beta"
         options={{
-          title: 'History',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clock.fill" color={color} />,
+          title: 'Beta',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="flame.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -56,8 +56,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          href: null, // Hidden — content moved to Profile page
         }}
       />
       <Tabs.Screen

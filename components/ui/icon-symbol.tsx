@@ -23,6 +23,8 @@ const MAPPING = {
   'person.2.fill': 'people',
   'trophy.fill': 'emoji-events',
   'gearshape.fill': 'settings',
+  'person.fill': 'person',
+  'flame.fill': 'local-fire-department',
 } as IconMapping;
 
 /**

@@ -686,8 +686,8 @@ export default function HomeScreen() {
         setInviteGymId(gymId);
         setFriendPickerVisible(true);
       } else {
-        setLastEndedSession(null);
         startSession(gymId);
+        setLastEndedSession(null);
       }
     },
     [startSession, inviteFlow],
