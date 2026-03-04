@@ -680,8 +680,13 @@ export default function HomeScreen() {
   );
 
   const handleEndSession = useCallback(() => {
+    if (activeSession) {
+      // Set the summary session immediately to prevent flashing
+      const endedSession = { ...activeSession, isActive: false, endedAt: new Date() };
+      setLastEndedSession(endedSession);
+    }
     endSession();
-  }, [endSession]);
+  }, [endSession, activeSession]);
 
   const handleInviteNow = useCallback(() => {
     setInviteFlow('invite-now');
@@ -937,7 +942,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   startButton: {
-    backgroundColor: '#0a7ea4',
+    backgroundColor: AppColors.primary,
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 10,
@@ -1077,7 +1082,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   summaryTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '700',
     marginTop: 20,
     marginBottom: 4,

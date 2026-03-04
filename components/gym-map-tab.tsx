@@ -17,6 +17,34 @@ const SINGAPORE_REGION = {
   longitudeDelta: 0.18,
 };
 
+function GymMarker({ gym, friends, onPress }: { gym: Gym; friends: Friend[]; onPress: (g: Gym) => void }) {
+  const [tracked, setTracked] = useState(true);
+  const brandColor = BRAND_COLORS[gym.brand] ?? '#6b7280';
+  const friendsHere = friends.filter((f) => f.currentGymId === gym.id && f.isAtGym);
+
+  useEffect(() => {
+    const t = setTimeout(() => setTracked(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <Marker
+      coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
+      onPress={() => onPress(gym)}
+      tracksViewChanges={tracked}
+    >
+      <View style={[styles.customMarker, { backgroundColor: brandColor }]}>
+        <MaterialIcons name="fitness-center" size={16} color="white" />
+        {friendsHere.length > 0 && (
+          <View style={styles.markerBadge}>
+            <ThemedText style={styles.markerBadgeText}>{friendsHere.length}</ThemedText>
+          </View>
+        )}
+      </View>
+    </Marker>
+  );
+}
+
 export function GymMapTab({ friends }: { friends: Friend[] }) {
   const mapRef = useRef<MapView | null>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -63,26 +91,9 @@ export function GymMapTab({ friends }: { friends: Friend[] }) {
         showsMyLocationButton={false}
         userInterfaceStyle={scheme === 'dark' ? 'dark' : 'light'}
       >
-        {SINGAPORE_GYMS.map((gym) => {
-          const brandColor = BRAND_COLORS[gym.brand] ?? '#6b7280';
-          const friendsHere = friends.filter((f) => f.currentGymId === gym.id && f.isAtGym);
-          return (
-            <Marker
-              key={gym.id}
-              coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
-              onPress={() => handleGymPress(gym)}
-            >
-              <View style={[styles.customMarker, { backgroundColor: brandColor }]}>
-                <MaterialIcons name="fitness-center" size={13} color="white" />
-                {friendsHere.length > 0 && (
-                  <View style={styles.markerBadge}>
-                    <ThemedText style={styles.markerBadgeText}>{friendsHere.length}</ThemedText>
-                  </View>
-                )}
-              </View>
-            </Marker>
-          );
-        })}
+        {SINGAPORE_GYMS.map((gym) => (
+          <GymMarker key={gym.id} gym={gym} friends={friends} onPress={handleGymPress} />
+        ))}
       </MapView>
 
       <GymDrawer
@@ -103,9 +114,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
