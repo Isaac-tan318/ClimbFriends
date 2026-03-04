@@ -9,6 +9,19 @@ export interface Gym {
   radiusMeters: number;
   address: string;
   imageUrl?: string;
+  grades?: string[];
+  walls?: string[];
+}
+
+export interface LoggedClimb {
+  id: string;
+  sessionId: string;
+  gymId: string;
+  grade: string;
+  color: string;
+  wall: string;
+  instagramUrl: string;
+  loggedAt: Date;
 }
 
 export interface ClimbingSession {
@@ -19,6 +32,7 @@ export interface ClimbingSession {
   endedAt: Date | null;
   durationMinutes: number;
   isActive: boolean;
+  climbs?: LoggedClimb[];
 }
 
 export interface User {

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ClimbingSession, UserStats } from '@/types';
+import { ClimbingSession, LoggedClimb, UserStats } from '@/types';
 import { MOCK_SESSIONS, CURRENT_USER_STATS, getUserSessions } from '@/data';
 
 interface SessionState {
@@ -11,6 +11,7 @@ interface SessionState {
   startSession: (gymId: string) => void;
   endSession: () => void;
   addSession: (session: ClimbingSession) => void;
+  logClimb: (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => void;
   getUserSessions: (userId: string) => ClimbingSession[];
   getRecentSessions: (limit?: number) => ClimbingSession[];
 }
@@ -66,6 +67,34 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   addSession: (session) => {
     set((state) => ({
       sessions: [session, ...state.sessions],
+    }));
+  },
+
+  logClimb: (climbData) => {
+    const { activeSession, sessions } = get();
+    const climb: LoggedClimb = {
+      ...climbData,
+      id: `climb-${Date.now()}`,
+      loggedAt: new Date(),
+    };
+
+    // Add to active session if it matches
+    if (activeSession && activeSession.id === climbData.sessionId) {
+      set({
+        activeSession: {
+          ...activeSession,
+          climbs: [...(activeSession.climbs ?? []), climb],
+        },
+      });
+    }
+
+    // Also update in sessions list (for ended sessions with summary)
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === climbData.sessionId
+          ? { ...s, climbs: [...(s.climbs ?? []), climb] }
+          : s,
+      ),
     }));
   },
   

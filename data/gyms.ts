@@ -1,5 +1,16 @@
 import { Gym } from '@/types';
 
+// Grade systems per brand
+export const BRAND_GRADES: Record<string, string[]> = {
+  'Boulder Planet': ['Wild', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+  'Boulder+': ['White', 'Yellow', 'Red', 'Blue', 'Purple', 'Green', 'Pink', 'Black'],
+  'FitBloc': ['0', '1', '2', '3', '4', '5', '6', '7', '8', 'Supercharged'],
+};
+
+export const getGradesForGym = (gym: Gym): string[] | null => {
+  return gym.grades ?? BRAND_GRADES[gym.brand] ?? null;
+};
+
 export const SINGAPORE_GYMS: Gym[] = [
   // Boulder+ Gyms
   {

@@ -6,13 +6,14 @@ import {Device} from '@/constants/device';
 import { AppColors } from '@/constants/theme';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
+import { LogClimbModal } from '@/components/log-climb-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS } from '@/data';
-import { ClimbingSession, Friend } from '@/types';
+import { ClimbingSession, Friend, LoggedClimb } from '@/types';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -72,11 +73,13 @@ function ActiveSessionCard({
   gymName,
   elapsed,
   onEnd,
+  onLogClimb,
   session,
 }: {
   gymName: string;
   elapsed: number;
   onEnd: () => void;
+  onLogClimb: () => void;
   session: ClimbingSession;
 }) {
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
@@ -118,8 +121,15 @@ function ActiveSessionCard({
       </View>
 
       {/* End Session + Log Climb buttons */}
+      {/* Climb count */}
+      {(session.climbs?.length ?? 0) > 0 && (
+        <ThemedText style={{ fontSize: 13, opacity: 0.6, textAlign: 'center', marginBottom: 8 }}>
+          {session.climbs!.length} climb{session.climbs!.length !== 1 ? 's' : ''} logged
+        </ThemedText>
+      )}
+
       <View style={styles.activeActions}>
-        <Pressable style={styles.logClimbButton}>
+        <Pressable style={styles.logClimbButton} onPress={onLogClimb}>
           <ThemedText style={styles.logClimbButtonText}>Log Climb</ThemedText>
         </Pressable>
         <Pressable style={[styles.endButton, { backgroundColor: '#fff', flexDirection: 'row', gap: 6 }]} onPress={onEnd}>
@@ -167,7 +177,7 @@ function SessionSummaryCard({
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const climbsLogged = 0;
+  const climbsLogged = session.climbs?.length ?? 0;
 
   return (
     <View style={styles.summaryCard}>
@@ -621,6 +631,7 @@ export default function HomeScreen() {
   const activeSession = useSessionStore((state) => state.activeSession);
   const startSession = useSessionStore((state) => state.startSession);
   const endSession = useSessionStore((state) => state.endSession);
+  const logClimb = useSessionStore((state) => state.logClimb);
   const allSessions = useSessionStore((state) => state.sessions);
   const plannedVisits = useSocialStore((state) => state.plannedVisits);
   const friends = useSocialStore((state) => state.friends);
@@ -631,6 +642,9 @@ export default function HomeScreen() {
   const [inviteFlow, setInviteFlow] = useState<'none' | 'invite-now' | 'make-plan'>('none');
   const [inviteGymId, setInviteGymId] = useState<string | null>(null);
   const [friendPickerVisible, setFriendPickerVisible] = useState(false);
+  const [logClimbVisible, setLogClimbVisible] = useState(false);
+  const [logClimbSessionId, setLogClimbSessionId] = useState<string | null>(null);
+  const [logClimbGymId, setLogClimbGymId] = useState<string | null>(null);
 
   const displayedSummarySession = lastEndedSession;
 
@@ -688,6 +702,33 @@ export default function HomeScreen() {
     endSession();
   }, [endSession, activeSession]);
 
+  const handleLogClimbOpen = useCallback((sessionId: string, gymId: string) => {
+    setLogClimbSessionId(sessionId);
+    setLogClimbGymId(gymId);
+    setLogClimbVisible(true);
+  }, []);
+
+  const handleLogClimbSubmit = useCallback(
+    (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => {
+      logClimb(climb);
+      // Update the lastEndedSession if logging for it
+      if (lastEndedSession && climb.sessionId === lastEndedSession.id) {
+        setLastEndedSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                climbs: [
+                  ...(prev.climbs ?? []),
+                  { ...climb, id: `climb-${Date.now()}`, loggedAt: new Date() },
+                ],
+              }
+            : prev,
+        );
+      }
+    },
+    [logClimb, lastEndedSession],
+  );
+
   const handleInviteNow = useCallback(() => {
     setInviteFlow('invite-now');
     setGymPickerVisible(true);
@@ -721,6 +762,7 @@ export default function HomeScreen() {
               gymName={activeGym?.name || 'Unknown Gym'}
               elapsed={elapsed}
               onEnd={handleEndSession}
+              onLogClimb={() => handleLogClimbOpen(activeSession.id, activeSession.gymId)}
               session={activeSession}
             />
           ) : lastEndedSession ? (
@@ -731,7 +773,10 @@ export default function HomeScreen() {
                 climbedWith={friends.slice(0, 3)}
               />
               <View style={styles.summaryActionsRow}>
-                <Pressable style={styles.summaryLogClimbButton}>
+                <Pressable
+                  style={styles.summaryLogClimbButton}
+                  onPress={() => handleLogClimbOpen(lastEndedSession.id, lastEndedSession.gymId)}
+                >
                   <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
                 </Pressable>
                 <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
@@ -791,6 +836,17 @@ export default function HomeScreen() {
         defaultMessage={inviteDefaultMessage}
         mode={inviteFlow === 'none' ? 'invite-now' : inviteFlow}
       />
+
+      {/* Log Climb Modal */}
+      {logClimbSessionId && logClimbGymId && (
+        <LogClimbModal
+          visible={logClimbVisible}
+          onClose={() => setLogClimbVisible(false)}
+          onSubmit={handleLogClimbSubmit}
+          sessionId={logClimbSessionId}
+          gymId={logClimbGymId}
+        />
+      )}
     </ThemedView>
   );
 }
