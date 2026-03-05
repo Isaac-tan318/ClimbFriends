@@ -19,7 +19,7 @@ export interface BetaPost {
   postedAt: Date;
   // Session fields (when type === 'session')
   sessionDurationMinutes?: number;
-  climbCount?: number;
+   climbCount?: number;
   climbedWithNames?: string[];
   // Send fields (when type === 'send')
   grade?: string;

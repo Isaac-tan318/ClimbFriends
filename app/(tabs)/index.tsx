@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text, Alert, Switch } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text, Alert, Switch, StyleProp, ViewStyle } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
 import {Device} from '@/constants/device';
@@ -71,6 +71,102 @@ function formatOrdinal(value: number): string {
   if (ones === 2) return `${value}nd`;
   if (ones === 3) return `${value}rd`;
   return `${value}th`;
+}
+
+type BottomSheetDismiss = (afterClose?: () => void) => void;
+type BottomSheetDragPanHandlers = ReturnType<typeof PanResponder.create>['panHandlers'];
+
+type BottomSheetModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  backgroundColor: string;
+  contentStyle?: StyleProp<ViewStyle>;
+  dismissThreshold?: number;
+  openBackdropDuration?: number;
+  children: ({
+    dismiss,
+    dragPanHandlers,
+  }: {
+    dismiss: BottomSheetDismiss;
+    dragPanHandlers: BottomSheetDragPanHandlers;
+  }) => React.ReactNode;
+};
+
+function BottomSheetModal({
+  visible,
+  onClose,
+  backgroundColor,
+  contentStyle,
+  dismissThreshold = 400,
+  openBackdropDuration = 100,
+  children,
+}: BottomSheetModalProps) {
+  const translateY = useRef(new Animated.Value(800)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  const dismissAfterCloseRef = useRef<(() => void) | null>(null);
+  onCloseRef.current = onClose;
+
+  const dismiss = useCallback(
+    (afterClose?: () => void) => {
+      dismissAfterCloseRef.current = afterClose ?? null;
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      ]).start(() => {
+        onCloseRef.current();
+        dismissAfterCloseRef.current?.();
+        dismissAfterCloseRef.current = null;
+      });
+    },
+    [translateY, backdropOpacity],
+  );
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(800);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: openBackdropDuration, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible, translateY, backdropOpacity, openBackdropDuration]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
+        onPanResponderMove: (_, gs) => {
+          if (gs.dy > 0) translateY.setValue(gs.dy);
+        },
+        onPanResponderRelease: (_, gs) => {
+          if (gs.dy > dismissThreshold || gs.vy > 0.5) {
+            dismiss();
+          } else {
+            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+          }
+        },
+      }),
+    [translateY, dismissThreshold, dismiss],
+  );
+
+  return (
+    <Modal visible={visible} animationType="none" transparent onRequestClose={() => dismiss()}>
+      <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} />
+        </Animated.View>
+        <Animated.View style={[styles.modalSheetBase, { backgroundColor, transform: [{ translateY }] }, contentStyle]}>
+          <View style={styles.bottomSheetDragHandleArea} {...panResponder.panHandlers}>
+            <View style={styles.bottomSheetHandle} />
+          </View>
+          {children({ dismiss, dragPanHandlers: panResponder.panHandlers })}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
 }
 
 function ActiveSessionCard({
@@ -263,66 +359,25 @@ function GymPickerModal({
 }) {
   const modalBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const translateY = useRef(new Animated.Value(800)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    if (visible) {
-      translateY.setValue(800);
-      backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0,  overshootClamping: true,
- useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible, translateY, backdropOpacity]);
-
-  const dismissModal = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      onCloseRef.current();
-    });
-  }, [translateY, backdropOpacity]);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
-        onPanResponderMove: (_, gs) => {
-          if (gs.dy > 0) translateY.setValue(gs.dy);
-        },
-        onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 500 || gs.vy > 0.5) {
-            dismissModal();
-          } else {
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-          }
-        },
-      }),
-    [translateY, dismissModal],
-  );
 
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={dismissModal}>
-      <View style={styles.modalOverlay}>
-        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
-        </Animated.View>
-        <Animated.View style={[styles.modalContent, { backgroundColor: modalBg, transform: [{ translateY }] }]}>
-          <View {...panResponder.panHandlers}>
-            <View style={styles.bottomSheetHandle} />
-          </View>
+    <BottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      backgroundColor={modalBg}
+      contentStyle={styles.modalContent}
+      dismissThreshold={500}
+      openBackdropDuration={100}
+    >
+      {({ dismiss, dragPanHandlers }) => (
+        <>
           <View style={styles.modalHeader}>
-            <Pressable onPress={dismissModal} style={styles.backButton}>
+            <Pressable onPress={() => dismiss()} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
-            <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
+            <View style={styles.modalHeaderTitleDragZone} {...dragPanHandlers}>
+              <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
+            </View>
             <View style={styles.backButtonSpacer} />
           </View>
           <FlatList
@@ -338,10 +393,9 @@ function GymPickerModal({
               </Pressable>
             )}
           />
-        </Animated.View>
-
-      </View>
-    </Modal>
+        </>
+      )}
+    </BottomSheetModal>
   );
 }
 
@@ -389,10 +443,6 @@ function FriendPickerModal({
   const [message, setMessage] = useState(defaultMessage);
   const [planDate, setPlanDate] = useState<Date | null>(null);
   const [planTime, setPlanTime] = useState<string | null>(null);
-  const translateY = useRef(new Animated.Value(800)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (visible) {
@@ -401,23 +451,8 @@ function FriendPickerModal({
       setMessage(defaultMessage);
       setPlanDate(null);
       setPlanTime(null);
-      translateY.setValue(800);
-      backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      ]).start();
     }
-  }, [visible, defaultMessage, translateY, backdropOpacity]);
-
-  const dismissModal = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      onCloseRef.current();
-    });
-  }, [translateY, backdropOpacity]);
+  }, [visible, defaultMessage]);
 
   const filteredFriends = useMemo(() => {
     if (!searchQuery.trim()) return friends;
@@ -433,10 +468,6 @@ function FriendPickerModal({
       return next;
     });
   }, []);
-
-  const handleSend = useCallback(() => {
-    onClose();
-  }, [onClose]);
 
   const dateOptions = useMemo(() => {
     const dates: Date[] = [];
@@ -458,40 +489,20 @@ function FriendPickerModal({
     [],
   );
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
-        onPanResponderMove: (_, gs) => {
-          if (gs.dy > 0) translateY.setValue(gs.dy);
-        },
-        onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 400 || gs.vy > 0.5) {
-            dismissModal();
-          } else {
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-          }
-        },
-      }),
-    [translateY, dismissModal],
-  );
-
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={dismissModal}>
-      <View style={styles.modalOverlay}>
-        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
-        </Animated.View>
-        <Animated.View style={[styles.friendPickerContent, { backgroundColor: modalBg, transform: [{ translateY }] }]}>
-          {/* Handle bar */}
-          <View {...panResponder.panHandlers}>
-            <View style={styles.bottomSheetHandle} />
-          </View>
-
+    <BottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      backgroundColor={modalBg}
+      contentStyle={styles.friendPickerContent}
+      dismissThreshold={400}
+      openBackdropDuration={300}
+    >
+      {({ dismiss }) => (
+        <>
           {/* Search bar */}
           <View style={styles.friendPickerSearchRow}>
-            <Pressable onPress={dismissModal} style={styles.backButton}>
+            <Pressable onPress={() => dismiss()} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
             <View style={[styles.friendPickerSearchBar, { backgroundColor: inputBg }]}>
@@ -601,14 +612,14 @@ function FriendPickerModal({
           {/* Send button */}
           <Pressable
             style={[styles.sendButton, selectedIds.size === 0 && { opacity: 0.5 }]}
-            onPress={handleSend}
+            onPress={() => dismiss()}
             disabled={selectedIds.size === 0}
           >
             <ThemedText style={styles.sendButtonText}>Send separately</ThemedText>
           </Pressable>
-        </Animated.View>
-      </View>
-    </Modal>
+        </>
+      )}
+    </BottomSheetModal>
   );
 }
 
@@ -846,37 +857,9 @@ export default function HomeScreen() {
     setGymPickerVisible(true);
   }, []);
 
-  // Publish modal animated values
-  const publishTranslateY = useRef(new Animated.Value(800)).current;
-  const publishBackdropOpacity = useRef(new Animated.Value(0)).current;
-
-  const dismissPublishModal = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(publishTranslateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(publishBackdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      setPublishModalVisible(false);
-    });
-  }, [publishTranslateY, publishBackdropOpacity]);
-
-  const publishPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
-        onPanResponderMove: (_, gs) => {
-          if (gs.dy > 0) publishTranslateY.setValue(gs.dy);
-        },
-        onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 100 || gs.vy > 0.5) {
-            dismissPublishModal();
-          } else {
-            Animated.spring(publishTranslateY, { toValue: 0, useNativeDriver: true }).start();
-          }
-        },
-      }),
-    [publishTranslateY, dismissPublishModal],
-  );
+  const handleClosePublishModal = useCallback(() => {
+    setPublishModalVisible(false);
+  }, []);
 
   const handleOpenPublish = useCallback(() => {
     if (lastEndedSession) {
@@ -888,28 +871,13 @@ export default function HomeScreen() {
     }
   }, [lastEndedSession]);
 
-  useEffect(() => {
-    if (publishModalVisible) {
-      publishTranslateY.setValue(800);
-      publishBackdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(publishTranslateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
-        Animated.timing(publishBackdropOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [publishModalVisible, publishTranslateY, publishBackdropOpacity]);
-
-  const handlePublishSubmit = useCallback(() => {
+  const handlePublishSubmit = useCallback((dismiss: BottomSheetDismiss) => {
     // In a real app, this would post to the backend / feed
     setHasPublished(true);
-    Animated.parallel([
-      Animated.spring(publishTranslateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(publishBackdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      setPublishModalVisible(false);
+    dismiss(() => {
       Alert.alert('Published!', 'Your session has been shared to the feed.');
     });
-  }, [publishTranslateY, publishBackdropOpacity]);
+  }, []);
 
   const handleFriendPickerClose = useCallback(() => {
     setFriendPickerVisible(false);
@@ -1293,23 +1261,21 @@ export default function HomeScreen() {
       )}
 
       {/* Publish Session Modal */}
-      <Modal
+      <BottomSheetModal
         visible={publishModalVisible}
-        animationType="none"
-        transparent
-        onRequestClose={dismissPublishModal}
+        onClose={handleClosePublishModal}
+        backgroundColor={isDark ? '#1c1c1e' : '#fff'}
+        contentStyle={styles.modalContent}
+        dismissThreshold={100}
+        openBackdropDuration={100}
       >
-        <View style={styles.modalOverlay}>
-          <Animated.View style={[styles.modalBackdrop, { opacity: publishBackdropOpacity }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={dismissPublishModal} />
-          </Animated.View>
-          <Animated.View style={[styles.modalContent, { backgroundColor: isDark ? '#1c1c1e' : '#fff', transform: [{ translateY: publishTranslateY }] }]}>  
-            <View {...publishPanResponder.panHandlers}>
-              <View style={styles.bottomSheetHandle} />
-            </View>
+        {({ dismiss, dragPanHandlers }) => (
+          <>
             <View style={styles.modalHeader}>
-              <ThemedText type="subtitle">Publish Session</ThemedText>
-              <Pressable onPress={dismissPublishModal}>
+              <View style={styles.modalHeaderTitleDragZone} {...dragPanHandlers}>
+                <ThemedText type="subtitle">Publish Session</ThemedText>
+              </View>
+              <Pressable onPress={() => dismiss()}>
                 <ThemedText style={styles.modalClose}>✕</ThemedText>
               </Pressable>
             </View>
@@ -1346,12 +1312,12 @@ export default function HomeScreen() {
             </View>
 
             {/* Submit */}
-            <Pressable style={styles.publishSubmitBtn} onPress={handlePublishSubmit}>
+            <Pressable style={styles.publishSubmitBtn} onPress={() => handlePublishSubmit(dismiss)}>
               <ThemedText style={styles.publishSubmitText}>Publish to Feed</ThemedText>
             </Pressable>
-          </Animated.View>
-        </View>
-      </Modal>
+          </>
+        )}
+      </BottomSheetModal>
     </ThemedView>
   );
 }
@@ -1688,10 +1654,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  modalContent: {
-    maxHeight: '70%',
+  modalSheetBase: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  modalContent: {
+    maxHeight: '70%',
     padding: 20,
   },
   modalHeader: {
@@ -1705,14 +1673,20 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     padding: 4,
   },
+  bottomSheetDragHandleArea: {
+    minHeight: 48,
+    paddingTop: 22,
+    paddingBottom: 10,
+    justifyContent: 'flex-start',
+  },
   bottomSheetHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#666',
     alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 0,
   },
   backButton: {
     width: 32,
@@ -1729,8 +1703,12 @@ const styles = StyleSheet.create({
   backButtonSpacer: {
     width: 32,
   },
-  modalHeaderTitle: {
+  modalHeaderTitleDragZone: {
     flex: 1,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  modalHeaderTitle: {
     textAlign: 'center',
   },
   gymPickerItem: {
@@ -1800,8 +1778,6 @@ const styles = StyleSheet.create({
   /* Friend picker modal */
   friendPickerContent: {
     maxHeight: '85%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     padding: 16,
     paddingBottom: 24,
   },
