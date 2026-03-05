@@ -12,7 +12,8 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
-import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, CURRENT_USER } from '@/data';
+import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, MOCK_NATIONAL_LEADERBOARD, MOCK_GYM_LEADERBOARD, CURRENT_USER } from '@/data';
+import type { GymLeaderboardEntry } from '@/data/mock-sessions';
 import { ClimbingSession, Friend, LoggedClimb, LeaderboardEntry } from '@/types';
 import {
   getAllRecentBetaPosts,
@@ -642,7 +643,196 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
 }
 
 type HomeTab = 'tracker' | 'feed' | 'ranks';
+type RankCategory = 'friends' | 'gyms' | 'national';
 
+/* ── Podium (top 3) with staggered animation: 3rd → 2nd → 1st ── */
+function AnimatedPodium({
+  entries,
+  currentUserId,
+}: {
+  entries: LeaderboardEntry[];
+  currentUserId: string;
+}) {
+  const top3 = entries.slice(0, 3);
+  const thirdAnim = useRef(new Animated.Value(0)).current;
+  const secondAnim = useRef(new Animated.Value(0)).current;
+  const firstAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    thirdAnim.setValue(0);
+    secondAnim.setValue(0);
+    firstAnim.setValue(0);
+    Animated.stagger(200, [
+      Animated.spring(thirdAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+      Animated.spring(secondAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+      Animated.spring(firstAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+    ]).start();
+  }, [entries]);
+
+  const podiumColors = ['#fbbf24', '#d1d5db', '#cd7f32']; // gold, silver, bronze
+  const podiumHeights = [120, 90, 70];
+  const animRefs = [firstAnim, secondAnim, thirdAnim];
+  // Display order: 3rd, 1st, 2nd (visually: left=3rd, center=1st, right=2nd)
+  const displayOrder = [2, 0, 1]; // indices into top3
+
+  if (top3.length < 3) return null;
+
+  return (
+    <View style={styles.podiumContainer}>
+      {displayOrder.map((idx) => {
+        const entry = top3[idx];
+        const anim = animRefs[idx];
+        const isUser = entry.userId === currentUserId;
+        const translateY = anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [60, 0],
+        });
+
+        return (
+          <Animated.View
+            key={entry.userId}
+            style={[
+              styles.podiumSlot,
+              {
+                opacity: anim,
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            {/* Avatar */}
+            <View
+              style={[
+                styles.podiumAvatar,
+                { backgroundColor: isUser ? AppColors.primary : '#9ca3af' },
+                idx === 0 && styles.podiumAvatarFirst,
+              ]}
+            >
+              <Text style={styles.podiumAvatarText}>{entry.user.displayName[0]}</Text>
+            </View>
+
+            {/* Name */}
+            <Text
+              style={[
+                styles.podiumName,
+                isUser && { color: AppColors.primary, fontWeight: '700' },
+              ]}
+              numberOfLines={1}
+            >
+              {entry.user.displayName.split(' ')[0]}
+            </Text>
+
+            {/* Hours */}
+            <Text style={styles.podiumHours}>
+              {Math.round(entry.totalMinutes / 6) / 10}h
+            </Text>
+
+            {/* Pedestal */}
+            <View
+              style={[
+                styles.podiumPedestal,
+                {
+                  height: podiumHeights[idx],
+                  backgroundColor: podiumColors[idx],
+                },
+              ]}
+            >
+              <Text style={styles.podiumRank}>#{idx + 1}</Text>
+            </View>
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ── Gym Podium (top 3 gyms) ── */
+function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
+  const top3 = entries.slice(0, 3);
+  const thirdAnim = useRef(new Animated.Value(0)).current;
+  const secondAnim = useRef(new Animated.Value(0)).current;
+  const firstAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    thirdAnim.setValue(0);
+    secondAnim.setValue(0);
+    firstAnim.setValue(0);
+    Animated.stagger(200, [
+      Animated.spring(thirdAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+      Animated.spring(secondAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+      Animated.spring(firstAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+    ]).start();
+  }, [entries]);
+
+  const podiumColors = ['#fbbf24', '#d1d5db', '#cd7f32'];
+  const podiumHeights = [120, 90, 70];
+  const animRefs = [firstAnim, secondAnim, thirdAnim];
+  const displayOrder = [2, 0, 1];
+
+  if (top3.length < 3) return null;
+
+  return (
+    <View style={styles.podiumContainer}>
+      {displayOrder.map((idx) => {
+        const entry = top3[idx];
+        const anim = animRefs[idx];
+        const shortGymName = entry.gymName.replace(/^(Boulder\+|Climb Central|BFF Climb|Boulder Planet|Fitbloc|Lighthouse)\s*/i, '').trim();
+        const translateY = anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [60, 0],
+        });
+
+        return (
+          <Animated.View
+            key={entry.gymId}
+            style={[
+              styles.podiumSlot,
+              {
+                opacity: anim,
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            {/* Gym icon */}
+            <View
+              style={[
+                styles.podiumAvatar,
+                { backgroundColor: '#6366f1' },
+                idx === 0 && styles.podiumAvatarFirst,
+              ]}
+            >
+              <Text style={styles.podiumAvatarText}>{shortGymName.charAt(0).toUpperCase()}</Text>
+            </View>
+
+            {/* Name */}
+            <Text style={styles.podiumName} numberOfLines={1}>
+              {shortGymName}
+            </Text>
+
+            {/* Hours */}
+            <Text style={styles.podiumHours}>
+              {Math.round(entry.totalMinutes / 60)}h
+            </Text>
+
+            {/* Pedestal */}
+            <View
+              style={[
+                styles.podiumPedestal,
+                {
+                  height: podiumHeights[idx],
+                  backgroundColor: podiumColors[idx],
+                },
+              ]}
+            >
+              <Text style={styles.podiumRank}>#{idx + 1}</Text>
+            </View>
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ── Leaderboard card (ranks 4+) ── */
 function RankLeaderboardCard({ entry, isCurrentUser }: { entry: LeaderboardEntry; isCurrentUser: boolean }) {
   const cardBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
@@ -650,33 +840,14 @@ function RankLeaderboardCard({ entry, isCurrentUser }: { entry: LeaderboardEntry
 
   const hours = Math.round(entry.totalMinutes / 60 * 10) / 10;
 
-  const getRankStyle = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return { backgroundColor: '#fef3c7', emoji: '\u{1F947}' };
-      case 2:
-        return { backgroundColor: '#f3f4f6', emoji: '\u{1F948}' };
-      case 3:
-        return { backgroundColor: '#fef3c7', emoji: '\u{1F949}' };
-      default:
-        return { backgroundColor: '#f3f4f6', emoji: null };
-    }
-  };
-
-  const rankStyle = getRankStyle(entry.rank);
-
   return (
     <View style={[
       styles.lbCard,
       { backgroundColor: isCurrentUser ? highlightBg : cardBg, borderColor },
       isCurrentUser && styles.lbCurrentUserCard,
     ]}>
-      <View style={[styles.lbRankBadge, { backgroundColor: rankStyle.backgroundColor }]}>
-        {rankStyle.emoji ? (
-          <ThemedText style={styles.lbRankEmoji}>{rankStyle.emoji}</ThemedText>
-        ) : (
-          <ThemedText style={styles.lbRankNumber}>#{entry.rank}</ThemedText>
-        )}
+      <View style={[styles.lbRankBadge, { backgroundColor: '#f3f4f6' }]}>
+        <ThemedText style={styles.lbRankNumber}>#{entry.rank}</ThemedText>
       </View>
 
       <View style={[styles.lbAvatar, { backgroundColor: isCurrentUser ? '#0a7ea4' : '#9ca3af' }]}>
@@ -703,12 +874,42 @@ function RankLeaderboardCard({ entry, isCurrentUser }: { entry: LeaderboardEntry
   );
 }
 
-function RankStatHighlight({ emoji, label, value }: { emoji: string; label: string; value: string }) {
+/* ── Gym leaderboard card (ranks 4+) ── */
+function GymLeaderboardCard({ entry }: { entry: GymLeaderboardEntry }) {
+  const cardBg = useThemeColor({}, 'background');
+  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
+  const hours = Math.round(entry.totalMinutes / 60);
+
+  return (
+    <View style={[styles.lbCard, { backgroundColor: cardBg, borderColor }]}>
+      <View style={[styles.lbRankBadge, { backgroundColor: '#f3f4f6' }]}>
+        <ThemedText style={styles.lbRankNumber}>#{entry.rank}</ThemedText>
+      </View>
+
+      <View style={[styles.lbAvatar, { backgroundColor: '#6366f1' }]}>
+        <ThemedText style={styles.lbAvatarText}>{entry.gymName.charAt(0).toUpperCase()}</ThemedText>
+      </View>
+
+      <View style={styles.lbUserInfo}>
+        <ThemedText style={styles.lbUserName}>{entry.gymName}</ThemedText>
+        <ThemedText style={styles.lbUserStats}>
+          {entry.activeMembersCount} climbers · {entry.totalSessions} sessions
+        </ThemedText>
+      </View>
+
+      <View style={styles.lbHoursContainer}>
+        <ThemedText style={styles.lbHoursValue}>{hours}</ThemedText>
+        <ThemedText style={styles.lbHoursLabel}>hours</ThemedText>
+      </View>
+    </View>
+  );
+}
+
+function RankStatHighlight({ label, value }: { label: string; value: string }) {
   const bgColor = useThemeColor({ light: '#f3f4f6', dark: '#262626' }, 'background');
 
   return (
     <View style={[styles.lbStatHighlight, { backgroundColor: bgColor }]}>
-      <ThemedText style={styles.lbStatEmoji}>{emoji}</ThemedText>
       <ThemedText style={styles.lbStatValue}>{value}</ThemedText>
       <ThemedText style={styles.lbStatLabel}>{label}</ThemedText>
     </View>
@@ -730,6 +931,7 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
 
   const [homeTab, setHomeTab] = useState<HomeTab>('tracker');
+  const [rankCategory, setRankCategory] = useState<RankCategory>('friends');
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
   const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
@@ -1182,29 +1384,82 @@ export default function HomeScreen() {
         />
       ) : (
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
-          {/* Community Stats */}
-          <View style={styles.lbStatsRow}>
-            <RankStatHighlight
-              emoji="👑"
-              label="Top Climber"
-              value={MOCK_LEADERBOARD[0].user.displayName.split(' ')[0]}
-            />
-            <RankStatHighlight
-              emoji="⏱️"
-              label="Total Hours"
-              value={`${Math.round(MOCK_LEADERBOARD.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
-            />
-            <RankStatHighlight
-              emoji="🧗"
-              label="Sessions"
-              value={String(MOCK_LEADERBOARD.reduce((sum, e) => sum + e.totalSessions, 0))}
-            />
+          {/* Category Toggle */}
+          <View style={styles.rankCategoryRow}>
+            {(['friends', 'gyms', 'national'] as RankCategory[]).map((cat) => (
+              <Pressable
+                key={cat}
+                style={[
+                  styles.rankCategoryBtn,
+                  rankCategory === cat && styles.rankCategoryBtnActive,
+                ]}
+                onPress={() => setRankCategory(cat)}
+              >
+                <Text
+                  style={[
+                    styles.rankCategoryLabel,
+                    { color: rankCategory === cat ? '#fff' : (isDark ? '#aaa' : '#666') },
+                  ]}
+                >
+                  {cat === 'friends' ? 'Friends' : cat === 'gyms' ? 'Gyms' : 'National'}
+                </Text>
+              </Pressable>
+            ))}
           </View>
 
-          {/* Your Position */}
-          {(() => {
-            const currentUserEntry = MOCK_LEADERBOARD.find((e) => e.userId === CURRENT_USER.id);
-            return currentUserEntry ? (
+          {/* Podium */}
+          {rankCategory === 'gyms' ? (
+            <AnimatedGymPodium entries={MOCK_GYM_LEADERBOARD} />
+          ) : (
+            <AnimatedPodium
+              entries={rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD}
+              currentUserId={CURRENT_USER.id}
+            />
+          )}
+
+          {/* Community Stats */}
+          {rankCategory !== 'gyms' && (() => {
+            const data = rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD;
+            return (
+              <View style={styles.lbStatsRow}>
+                <RankStatHighlight
+                  label="Top Climber"
+                  value={data[0].user.displayName.split(' ')[0]}
+                />
+                <RankStatHighlight
+                  label="Total Hours"
+                  value={`${Math.round(data.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
+                />
+                <RankStatHighlight
+                  label="Sessions"
+                  value={String(data.reduce((sum, e) => sum + e.totalSessions, 0))}
+                />
+              </View>
+            );
+          })()}
+
+          {rankCategory === 'gyms' && (
+            <View style={styles.lbStatsRow}>
+              <RankStatHighlight
+                label="Top Gym"
+                value={MOCK_GYM_LEADERBOARD[0].gymName.replace(/^(Boulder\+|Climb Central|BFF Climb|Boulder Planet|Fitbloc|Lighthouse)\s*/i, '')}
+              />
+              <RankStatHighlight
+                label="Total Hours"
+                value={`${Math.round(MOCK_GYM_LEADERBOARD.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
+              />
+              <RankStatHighlight
+                label="Climbers"
+                value={String(MOCK_GYM_LEADERBOARD.reduce((sum, e) => sum + e.activeMembersCount, 0))}
+              />
+            </View>
+          )}
+
+          {/* Your Position (people categories only) */}
+          {rankCategory !== 'gyms' && (() => {
+            const data = rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD;
+            const currentUserEntry = data.find((e) => e.userId === CURRENT_USER.id);
+            return currentUserEntry && currentUserEntry.rank > 3 ? (
               <View style={styles.lbYourPositionSection}>
                 <ThemedText type="subtitle" style={styles.lbSectionTitle}>
                   Your Position
@@ -1214,18 +1469,24 @@ export default function HomeScreen() {
             ) : null;
           })()}
 
-          {/* Full Leaderboard */}
+          {/* Full Leaderboard (4th place onwards — top 3 shown in podium) */}
           <View style={styles.lbLeaderboardSection}>
             <ThemedText type="subtitle" style={styles.lbSectionTitle}>
               Rankings
             </ThemedText>
-            {MOCK_LEADERBOARD.map((entry) => (
-              <RankLeaderboardCard
-                key={entry.userId}
-                entry={entry}
-                isCurrentUser={entry.userId === CURRENT_USER.id}
-              />
-            ))}
+            {rankCategory === 'gyms'
+              ? MOCK_GYM_LEADERBOARD.slice(3).map((entry) => (
+                  <GymLeaderboardCard key={entry.gymId} entry={entry} />
+                ))
+              : (rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD)
+                  .slice(3)
+                  .map((entry) => (
+                    <RankLeaderboardCard
+                      key={entry.userId}
+                      entry={entry}
+                      isCurrentUser={entry.userId === CURRENT_USER.id}
+                    />
+                  ))}
           </View>
         </ScrollView>
       )}
@@ -2190,10 +2451,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
   },
-  lbStatEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
   lbStatValue: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -2280,6 +2537,83 @@ const styles = StyleSheet.create({
   lbHoursLabel: {
     fontSize: 11,
     opacity: 0.5,
+  },
+
+  /* ── Rank category toggle ── */
+  rankCategoryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  rankCategoryBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(150,150,150,0.12)',
+  },
+  rankCategoryBtnActive: {
+    backgroundColor: AppColors.primary,
+  },
+  rankCategoryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  /* ── Podium ── */
+  podiumContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginBottom: 24,
+    paddingTop: 16,
+    gap: 6,
+  },
+  podiumSlot: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  podiumAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  podiumAvatarFirst: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  podiumAvatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  podiumName: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  podiumHours: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginBottom: 6,
+  },
+  podiumPedestal: {
+    width: '100%',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 10,
+  },
+  podiumRank: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.5)',
   },
 
   /* ── Publish modal ── */
