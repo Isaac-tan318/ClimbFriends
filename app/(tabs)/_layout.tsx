@@ -42,8 +42,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="leaderboard"
         options={{
-          title: 'Ranks',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="trophy.fill" color={color} />,
+          href: null, // Hidden — content moved to Home page
         }}
       />
             <Tabs.Screen

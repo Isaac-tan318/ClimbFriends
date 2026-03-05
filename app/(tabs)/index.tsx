@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text, Alert, Switch } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
 import {Device} from '@/constants/device';
@@ -12,8 +12,8 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
-import { getGymById, SINGAPORE_GYMS } from '@/data';
-import { ClimbingSession, Friend, LoggedClimb } from '@/types';
+import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, CURRENT_USER } from '@/data';
+import { ClimbingSession, Friend, LoggedClimb, LeaderboardEntry } from '@/types';
 import {
   getAllRecentBetaPosts,
   BetaPost,
@@ -630,7 +630,79 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
   );
 }
 
-type HomeTab = 'tracker' | 'feed';
+type HomeTab = 'tracker' | 'feed' | 'ranks';
+
+function RankLeaderboardCard({ entry, isCurrentUser }: { entry: LeaderboardEntry; isCurrentUser: boolean }) {
+  const cardBg = useThemeColor({}, 'background');
+  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
+  const highlightBg = useThemeColor({ light: '#eff6ff', dark: '#1e3a5f' }, 'background');
+
+  const hours = Math.round(entry.totalMinutes / 60 * 10) / 10;
+
+  const getRankStyle = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return { backgroundColor: '#fef3c7', emoji: '\u{1F947}' };
+      case 2:
+        return { backgroundColor: '#f3f4f6', emoji: '\u{1F948}' };
+      case 3:
+        return { backgroundColor: '#fef3c7', emoji: '\u{1F949}' };
+      default:
+        return { backgroundColor: '#f3f4f6', emoji: null };
+    }
+  };
+
+  const rankStyle = getRankStyle(entry.rank);
+
+  return (
+    <View style={[
+      styles.lbCard,
+      { backgroundColor: isCurrentUser ? highlightBg : cardBg, borderColor },
+      isCurrentUser && styles.lbCurrentUserCard,
+    ]}>
+      <View style={[styles.lbRankBadge, { backgroundColor: rankStyle.backgroundColor }]}>
+        {rankStyle.emoji ? (
+          <ThemedText style={styles.lbRankEmoji}>{rankStyle.emoji}</ThemedText>
+        ) : (
+          <ThemedText style={styles.lbRankNumber}>#{entry.rank}</ThemedText>
+        )}
+      </View>
+
+      <View style={[styles.lbAvatar, { backgroundColor: isCurrentUser ? '#0a7ea4' : '#9ca3af' }]}>
+        <ThemedText style={styles.lbAvatarText}>
+          {entry.user.displayName[0]}
+        </ThemedText>
+      </View>
+
+      <View style={styles.lbUserInfo}>
+        <ThemedText style={styles.lbUserName}>
+          {entry.user.displayName}
+          {isCurrentUser && <ThemedText style={styles.lbYouTag}> (You)</ThemedText>}
+        </ThemedText>
+        <ThemedText style={styles.lbUserStats}>
+          {entry.totalSessions} sessions
+        </ThemedText>
+      </View>
+
+      <View style={styles.lbHoursContainer}>
+        <ThemedText style={styles.lbHoursValue}>{hours}</ThemedText>
+        <ThemedText style={styles.lbHoursLabel}>hours</ThemedText>
+      </View>
+    </View>
+  );
+}
+
+function RankStatHighlight({ emoji, label, value }: { emoji: string; label: string; value: string }) {
+  const bgColor = useThemeColor({ light: '#f3f4f6', dark: '#262626' }, 'background');
+
+  return (
+    <View style={[styles.lbStatHighlight, { backgroundColor: bgColor }]}>
+      <ThemedText style={styles.lbStatEmoji}>{emoji}</ThemedText>
+      <ThemedText style={styles.lbStatValue}>{value}</ThemedText>
+      <ThemedText style={styles.lbStatLabel}>{label}</ThemedText>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const stats = useSessionStore((state) => state.stats);
@@ -656,6 +728,12 @@ export default function HomeScreen() {
   const [logClimbVisible, setLogClimbVisible] = useState(false);
   const [logClimbSessionId, setLogClimbSessionId] = useState<string | null>(null);
   const [logClimbGymId, setLogClimbGymId] = useState<string | null>(null);
+
+  // Publish session state
+  const [publishModalVisible, setPublishModalVisible] = useState(false);
+  const [publishDescription, setPublishDescription] = useState('');
+  const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
+  const [hasPublished, setHasPublished] = useState(false);
 
   const displayedSummarySession = lastEndedSession;
 
@@ -687,8 +765,22 @@ export default function HomeScreen() {
   }, [activeSession, allSessions]);
 
   const handleStartSession = useCallback(() => {
-    setGymPickerVisible(true);
-  }, []);
+    if (lastEndedSession && !hasPublished) {
+      Alert.alert(
+        'Start new session without publishing?',
+        'Your session will still be stored privately.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Start Anyway',
+            onPress: () => setGymPickerVisible(true),
+          },
+        ],
+      );
+    } else {
+      setGymPickerVisible(true);
+    }
+  }, [lastEndedSession, hasPublished]);
 
   const handleGymSelect = useCallback(
     (gymId: string) => {
@@ -711,6 +803,10 @@ export default function HomeScreen() {
       setLastEndedSession(endedSession);
     }
     endSession();
+    // Reset publish state for the new ended session
+    setHasPublished(false);
+    setPublishDescription('');
+    setPublishClimbedWith(false);
   }, [endSession, activeSession]);
 
   const handleLogClimbOpen = useCallback((sessionId: string, gymId: string) => {
@@ -750,6 +846,71 @@ export default function HomeScreen() {
     setGymPickerVisible(true);
   }, []);
 
+  // Publish modal animated values
+  const publishTranslateY = useRef(new Animated.Value(800)).current;
+  const publishBackdropOpacity = useRef(new Animated.Value(0)).current;
+
+  const dismissPublishModal = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(publishTranslateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
+      Animated.timing(publishBackdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => {
+      setPublishModalVisible(false);
+    });
+  }, [publishTranslateY, publishBackdropOpacity]);
+
+  const publishPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+        onPanResponderMove: (_, gs) => {
+          if (gs.dy > 0) publishTranslateY.setValue(gs.dy);
+        },
+        onPanResponderRelease: (_, gs) => {
+          if (gs.dy > 100 || gs.vy > 0.5) {
+            dismissPublishModal();
+          } else {
+            Animated.spring(publishTranslateY, { toValue: 0, useNativeDriver: true }).start();
+          }
+        },
+      }),
+    [publishTranslateY, dismissPublishModal],
+  );
+
+  const handleOpenPublish = useCallback(() => {
+    if (lastEndedSession) {
+      const gym = getGymById(lastEndedSession.gymId);
+      const duration = formatDurationMinutes(lastEndedSession.durationMinutes);
+      setPublishDescription(`Climbed for ${duration} at ${gym?.name ?? 'the gym'}!`);
+      setPublishClimbedWith(false);
+      setPublishModalVisible(true);
+    }
+  }, [lastEndedSession]);
+
+  useEffect(() => {
+    if (publishModalVisible) {
+      publishTranslateY.setValue(800);
+      publishBackdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(publishTranslateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
+        Animated.timing(publishBackdropOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [publishModalVisible, publishTranslateY, publishBackdropOpacity]);
+
+  const handlePublishSubmit = useCallback(() => {
+    // In a real app, this would post to the backend / feed
+    setHasPublished(true);
+    Animated.parallel([
+      Animated.spring(publishTranslateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
+      Animated.timing(publishBackdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => {
+      setPublishModalVisible(false);
+      Alert.alert('Published!', 'Your session has been shared to the feed.');
+    });
+  }, [publishTranslateY, publishBackdropOpacity]);
+
   const handleFriendPickerClose = useCallback(() => {
     setFriendPickerVisible(false);
     setInviteFlow('none');
@@ -761,7 +922,32 @@ export default function HomeScreen() {
     ? `Come climb with me at ${inviteGymName} right now!`
     : `Come climb with me at ${inviteGymName}`;
 
-  const recentPosts = useMemo(() => getAllRecentBetaPosts(30), []);
+  const recentPosts = useMemo(() => getAllRecentBetaPosts(60).filter((p) => p.type === 'session'), []);
+
+  // Build a lookup of sends grouped by userId + gymId
+  const sendsLookup = useMemo(() => {
+    const allPosts = getAllRecentBetaPosts(100);
+    const map = new Map<string, BetaPost[]>();
+    for (const p of allPosts) {
+      if (p.type !== 'send') continue;
+      const key = `${p.userId}__${p.gymId}`;
+      const arr = map.get(key) ?? [];
+      arr.push(p);
+      map.set(key, arr);
+    }
+    return map;
+  }, []);
+
+  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+
+  const togglePostExpanded = useCallback((postId: string) => {
+    setExpandedPosts((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  }, []);
 
   const mutedText = isDark ? '#999' : '#666';
   const cardBorder = isDark ? AppColors.border.dark : AppColors.border.light;
@@ -785,6 +971,10 @@ export default function HomeScreen() {
     const gym = getGymById(item.gymId);
     const gymLabel = gym?.name ?? item.gymId;
 
+    const hasSends = (item.climbCount ?? 0) > 0;
+    const isExpanded = expandedPosts.has(item.id);
+    const sends = hasSends ? (sendsLookup.get(`${item.userId}__${item.gymId}`) ?? []) : [];
+
     return (
       <View style={styles.postCard}>
         {/* Header */}
@@ -802,65 +992,104 @@ export default function HomeScreen() {
 
         {/* Title */}
         <Text style={[styles.feedTitle, { color: colors.text }]}>
-          {item.type === 'session'
-            ? `${firstName} climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`
-            : `${firstName} sent a ${item.grade ?? ''} ${item.color ?? ''}!`}
+          {`${firstName} climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`}
         </Text>
 
         {/* Metrics */}
         <View style={styles.feedMetricsRow}>
-          {item.type === 'session' ? (
-            <>
-              <View style={styles.feedMetric}>
-                <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Time</Text>
-                <Text style={[styles.feedMetricValue, { color: colors.text }]}>
-                  {feedFormatDuration(item.sessionDurationMinutes ?? 0)}
-                </Text>
-              </View>
-              <View style={styles.feedMetric}>
-                <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Climbs logged</Text>
-                <Text style={[styles.feedMetricValue, { color: colors.text }]}>
-                  {item.climbCount ?? 0}
-                </Text>
-              </View>
-            </>
-          ) : (
-            <>
-              {item.grade != null && (
-                <View style={styles.feedMetric}>
-                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Grade</Text>
-                  <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.grade}</Text>
-                </View>
-              )}
-              {item.color != null && (
-                <View style={styles.feedMetric}>
-                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Color</Text>
-                  <View style={styles.feedColorRow}>
-                    <View style={[styles.feedColorDot, { backgroundColor: getColorHex(item.color) }]} />
-                    <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.color}</Text>
-                  </View>
-                </View>
-              )}
-              {item.wall != null && (
-                <View style={styles.feedMetric}>
-                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Wall</Text>
-                  <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.wall}</Text>
-                </View>
-              )}
-            </>
-          )}
-        </View>
-
-        {/* Instagram placeholder */}
-        {item.type === 'send' && item.instagramUrl ? (
-          <View style={[styles.igPlaceholder, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
-            <Text style={styles.igIcon}>📷</Text>
-            <Text style={[styles.igText, { color: mutedText }]}>Instagram Reel</Text>
-            <Text style={[styles.igUrl, { color: AppColors.primary }]} numberOfLines={1}>
-              {item.instagramUrl}
+          <View style={styles.feedMetric}>
+            <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Time</Text>
+            <Text style={[styles.feedMetricValue, { color: colors.text }]}>
+              {feedFormatDuration(item.sessionDurationMinutes ?? 0)}
             </Text>
           </View>
-        ) : null}
+          <View style={styles.feedMetric}>
+            <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Climbs logged</Text>
+            <Text style={[styles.feedMetricValue, { color: colors.text }]}>
+              {item.climbCount ?? 0}
+            </Text>
+          </View>
+        </View>
+
+        {/* Climbed with */}
+        {item.climbedWithNames && item.climbedWithNames.length > 0 && (
+          <View style={styles.feedClimbedWithRow}>
+            <View style={styles.feedClimbedWithAvatars}>
+              {item.climbedWithNames.map((name, i) => (
+                <View
+                  key={name}
+                  style={[
+                    styles.feedClimbedWithCircle,
+                    { marginLeft: i > 0 ? -8 : 0, backgroundColor: AppColors.avatarFallbackBg },
+                  ]}
+                >
+                  <Text style={[styles.feedClimbedWithInitial, { color: AppColors.avatarFallbackText }]}>
+                    {name[0]}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text style={[styles.feedClimbedWithText, { color: mutedText }]}>
+              with {item.climbedWithNames.map((n) => n.split(' ')[0]).join(', ')}
+            </Text>
+          </View>
+        )}
+
+        {/* Show Sends button */}
+        {hasSends && sends.length > 0 && (
+          <>
+            <Pressable
+              style={[styles.showSendsBtn, { borderColor: cardBorder }]}
+              onPress={() => togglePostExpanded(item.id)}
+            >
+              <Text style={[styles.showSendsBtnText, { color: AppColors.primary }]}>
+                {isExpanded ? 'Hide Sends' : `Show Sends (${sends.length})`}
+              </Text>
+              <MaterialIcons
+                name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={18}
+                color={AppColors.primary}
+              />
+            </Pressable>
+
+            {isExpanded && sends.map((send) => (
+              <View key={send.id} style={[styles.sendCard, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
+                <View style={styles.sendRow}>
+                  {send.grade != null && (
+                    <View style={styles.feedMetric}>
+                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Grade</Text>
+                      <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.grade}</Text>
+                    </View>
+                  )}
+                  {send.color != null && (
+                    <View style={styles.feedMetric}>
+                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Color</Text>
+                      <View style={styles.feedColorRow}>
+                        <View style={[styles.feedColorDot, { backgroundColor: getColorHex(send.color) }]} />
+                        <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.color}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {send.wall != null && (
+                    <View style={styles.feedMetric}>
+                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Wall</Text>
+                      <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.wall}</Text>
+                    </View>
+                  )}
+                </View>
+                {send.instagramUrl ? (
+                  <View style={[styles.igPlaceholder, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
+                    <Text style={styles.igIcon}>📷</Text>
+                    <Text style={[styles.igText, { color: mutedText }]}>Instagram Reel</Text>
+                    <Text style={[styles.igUrl, { color: AppColors.primary }]} numberOfLines={1}>
+                      {send.instagramUrl}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </>
+        )}
 
         <View style={[styles.postDivider, { backgroundColor: cardBorder }]} />
       </View>
@@ -873,42 +1102,29 @@ export default function HomeScreen() {
 
       {/* Top Tab Switcher */}
       <View style={styles.topTabRow}>
-        <Pressable
-          style={[
-            styles.topTabButton,
-            homeTab === 'tracker' && styles.topTabButtonActive,
-          ]}
-          onPress={() => setHomeTab('tracker')}
-        >
-          <Text
+        {(['tracker', 'feed', 'ranks'] as HomeTab[]).map((tab) => (
+          <Pressable
+            key={tab}
             style={[
-              styles.topTabLabel,
-              { color: homeTab === 'tracker' ? AppColors.primary : (isDark ? '#888' : '#999') },
+              styles.topTabButton,
+              homeTab === tab && styles.topTabButtonActive,
             ]}
+            onPress={() => setHomeTab(tab)}
           >
-            Tracker
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.topTabButton,
-            homeTab === 'feed' && styles.topTabButtonActive,
-          ]}
-          onPress={() => setHomeTab('feed')}
-        >
-          <Text
-            style={[
-              styles.topTabLabel,
-              { color: homeTab === 'feed' ? AppColors.primary : (isDark ? '#888' : '#999') },
-            ]}
-          >
-            Feed
-          </Text>
-        </Pressable>
+            <Text
+              style={[
+                styles.topTabLabel,
+                { color: homeTab === tab ? AppColors.primary : (isDark ? '#888' : '#999') },
+              ]}
+            >
+              {tab === 'tracker' ? 'Tracker' : tab === 'feed' ? 'Feed' : 'Ranks'}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {homeTab === 'tracker' ? (
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Current Session */}
         <View style={styles.section}>
           {activeSession ? (
@@ -932,6 +1148,14 @@ export default function HomeScreen() {
                   onPress={() => handleLogClimbOpen(lastEndedSession.id, lastEndedSession.gymId)}
                 >
                   <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.publishButton, hasPublished && styles.publishButtonDone]}
+                  onPress={hasPublished ? undefined : handleOpenPublish}
+                >
+                  <ThemedText style={styles.publishButtonText}>
+                    {hasPublished ? '✓ Published' : 'Publish'}
+                  </ThemedText>
                 </Pressable>
                 <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
                   <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
@@ -970,8 +1194,8 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
-      ) : (
+        </ScrollView>
+      ) : homeTab === 'feed' ? (
         <FlatList
           data={recentPosts}
           keyExtractor={(p) => p.id}
@@ -988,6 +1212,54 @@ export default function HomeScreen() {
             </View>
           }
         />
+      ) : (
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
+          {/* Community Stats */}
+          <View style={styles.lbStatsRow}>
+            <RankStatHighlight
+              emoji="👑"
+              label="Top Climber"
+              value={MOCK_LEADERBOARD[0].user.displayName.split(' ')[0]}
+            />
+            <RankStatHighlight
+              emoji="⏱️"
+              label="Total Hours"
+              value={`${Math.round(MOCK_LEADERBOARD.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
+            />
+            <RankStatHighlight
+              emoji="🧗"
+              label="Sessions"
+              value={String(MOCK_LEADERBOARD.reduce((sum, e) => sum + e.totalSessions, 0))}
+            />
+          </View>
+
+          {/* Your Position */}
+          {(() => {
+            const currentUserEntry = MOCK_LEADERBOARD.find((e) => e.userId === CURRENT_USER.id);
+            return currentUserEntry ? (
+              <View style={styles.lbYourPositionSection}>
+                <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+                  Your Position
+                </ThemedText>
+                <RankLeaderboardCard entry={currentUserEntry} isCurrentUser={true} />
+              </View>
+            ) : null;
+          })()}
+
+          {/* Full Leaderboard */}
+          <View style={styles.lbLeaderboardSection}>
+            <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+              Rankings
+            </ThemedText>
+            {MOCK_LEADERBOARD.map((entry) => (
+              <RankLeaderboardCard
+                key={entry.userId}
+                entry={entry}
+                isCurrentUser={entry.userId === CURRENT_USER.id}
+              />
+            ))}
+          </View>
+        </ScrollView>
       )}
 
       {/* Gym Picker Modal */}
@@ -1019,6 +1291,67 @@ export default function HomeScreen() {
           gymId={logClimbGymId}
         />
       )}
+
+      {/* Publish Session Modal */}
+      <Modal
+        visible={publishModalVisible}
+        animationType="none"
+        transparent
+        onRequestClose={dismissPublishModal}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View style={[styles.modalBackdrop, { opacity: publishBackdropOpacity }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={dismissPublishModal} />
+          </Animated.View>
+          <Animated.View style={[styles.modalContent, { backgroundColor: isDark ? '#1c1c1e' : '#fff', transform: [{ translateY: publishTranslateY }] }]}>  
+            <View {...publishPanResponder.panHandlers}>
+              <View style={styles.bottomSheetHandle} />
+            </View>
+            <View style={styles.modalHeader}>
+              <ThemedText type="subtitle">Publish Session</ThemedText>
+              <Pressable onPress={dismissPublishModal}>
+                <ThemedText style={styles.modalClose}>✕</ThemedText>
+              </Pressable>
+            </View>
+
+            {/* Description */}
+            <ThemedText style={styles.publishLabel}>Description</ThemedText>
+            <TextInput
+              style={[
+                styles.publishInput,
+                {
+                  color: colors.text,
+                  backgroundColor: isDark ? '#2a2a2a' : '#f3f4f6',
+                  borderColor: cardBorder,
+                },
+              ]}
+              value={publishDescription}
+              onChangeText={setPublishDescription}
+              placeholder="What was your session like?"
+              placeholderTextColor={mutedText}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+
+            {/* Climbed With */}
+            <View style={styles.publishToggleRow}>
+              <ThemedText style={{ fontSize: 14, fontWeight: '600' }}>Include Climbed With</ThemedText>
+              <Switch
+                value={publishClimbedWith}
+                onValueChange={setPublishClimbedWith}
+                trackColor={{ false: isDark ? '#555' : '#ddd', true: AppColors.primary }}
+                thumbColor="white"
+              />
+            </View>
+
+            {/* Submit */}
+            <Pressable style={styles.publishSubmitBtn} onPress={handlePublishSubmit}>
+              <ThemedText style={styles.publishSubmitText}>Publish to Feed</ThemedText>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1196,7 +1529,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   summaryCard: {
-    marginTop: 8,
     marginBottom: 24,
     marginLeft: 8,
   },
@@ -1312,7 +1644,23 @@ const styles = StyleSheet.create({
   },
   summaryActionsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+  },
+  publishButton: {
+    flex: 1,
+    backgroundColor: '#22c55e',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publishButtonDone: {
+    backgroundColor: '#86efac',
+  },
+  publishButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
   },
   newSessionButtonText: {
     color: 'white',
@@ -1664,12 +2012,12 @@ const styles = StyleSheet.create({
   /* ── Top tab switcher ── */
   topTabRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 4,
-    gap: 24,
   },
   topTabButton: {
+    flex: 1,
+    alignItems: 'center',
     paddingBottom: 8,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
@@ -1698,8 +2046,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   feedAvatar: {
-    width: 50,
-    height: 50,
+    width: 40,
+    height: 40,
     borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1713,7 +2061,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   feedUserName: {
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: '600',
     marginLeft: 8,
   },
@@ -1724,7 +2072,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   feedTitle: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '700',
     marginTop: 20,
     marginBottom: 4,
@@ -1763,6 +2111,56 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginTop: 8,
   },
+  feedClimbedWithRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  feedClimbedWithAvatars: {
+    flexDirection: 'row',
+  },
+  feedClimbedWithCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  feedClimbedWithInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  feedClimbedWithText: {
+    fontSize: 13,
+  },
+  showSendsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 4,
+    marginBottom: 4,
+    gap: 4,
+  },
+  showSendsBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sendCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 6,
+  },
+  sendRow: {
+    flexDirection: 'row',
+    gap: 32,
+  },
   igPlaceholder: {
     marginTop: 10,
     borderRadius: 10,
@@ -1798,6 +2196,149 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.6,
     textAlign: 'center',
+  },
+
+  /* ── Ranks / Leaderboard styles ── */
+  lbScrollContent: {
+    padding: 20,
+    paddingTop: 16,
+  },
+  lbStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  lbStatHighlight: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+  },
+  lbStatEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  lbStatValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  lbStatLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  lbYourPositionSection: {
+    marginBottom: 24,
+  },
+  lbSectionTitle: {
+    marginBottom: 12,
+  },
+  lbLeaderboardSection: {
+    marginBottom: 20,
+  },
+  lbCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  lbCurrentUserCard: {
+    borderColor: '#0a7ea4',
+    borderWidth: 2,
+  },
+  lbRankBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  lbRankEmoji: {
+    fontSize: 18,
+  },
+  lbRankNumber: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    opacity: 0.7,
+  },
+  lbAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  lbAvatarText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  lbUserInfo: {
+    flex: 1,
+  },
+  lbUserName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  lbYouTag: {
+    color: '#0a7ea4',
+    fontWeight: 'normal',
+  },
+  lbUserStats: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  lbHoursContainer: {
+    alignItems: 'flex-end',
+  },
+  lbHoursValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0a7ea4',
+  },
+  lbHoursLabel: {
+    fontSize: 11,
+    opacity: 0.5,
+  },
+
+  /* ── Publish modal ── */
+  publishLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  publishInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    minHeight: 80,
+  },
+  publishToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  publishSubmitBtn: {
+    backgroundColor: '#22c55e',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  publishSubmitText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

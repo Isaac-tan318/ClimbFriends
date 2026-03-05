@@ -20,6 +20,7 @@ export interface BetaPost {
   // Session fields (when type === 'session')
   sessionDurationMinutes?: number;
   climbCount?: number;
+  climbedWithNames?: string[];
   // Send fields (when type === 'send')
   grade?: string;
   color?: string;
@@ -52,6 +53,30 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(0, 12, 0),
     sessionDurationMinutes: 95,
     climbCount: 8,
+    climbedWithNames: ['Isaac Tan', 'Mike Lim'],
+  },
+  {
+    id: 'beta-2a',
+    type: 'send',
+    userId: 'user-2',
+    userName: 'Sarah Tan',
+    gymId: 'boulder-plus-aperia',
+    postedAt: daysAgo(0, 12, 15),
+    grade: 'Green',
+    color: 'Green',
+    wall: 'Slab',
+  },
+  {
+    id: 'beta-2b',
+    type: 'send',
+    userId: 'user-2',
+    userName: 'Sarah Tan',
+    gymId: 'boulder-plus-aperia',
+    postedAt: daysAgo(0, 12, 45),
+    grade: 'Yellow',
+    color: 'Yellow',
+    wall: 'Overhang',
+    instagramUrl: 'https://www.instagram.com/reel/sarah-send1',
   },
   {
     id: 'beta-3',
@@ -85,6 +110,7 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(1, 18, 0),
     sessionDurationMinutes: 90,
     climbCount: 12,
+    climbedWithNames: ['Sarah Tan', 'Jessica Ng'],
   },
 
   // Boulder Planet Tai Seng posts
@@ -120,6 +146,30 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(1, 17, 0),
     sessionDurationMinutes: 120,
     climbCount: 15,
+    climbedWithNames: ['Ryan Lee'],
+  },
+  {
+    id: 'beta-8a',
+    type: 'send',
+    userId: 'user-3',
+    userName: 'Mike Lim',
+    gymId: 'boulder-planet-taiseng',
+    postedAt: daysAgo(1, 17, 20),
+    grade: '9',
+    color: 'Black',
+    wall: 'Main Wall',
+  },
+  {
+    id: 'beta-8b',
+    type: 'send',
+    userId: 'user-3',
+    userName: 'Mike Lim',
+    gymId: 'boulder-planet-taiseng',
+    postedAt: daysAgo(1, 17, 50),
+    grade: '7',
+    color: 'Red',
+    wall: 'Competition Wall',
+    instagramUrl: 'https://www.instagram.com/reel/mike-send1',
   },
   {
     id: 'beta-9',
@@ -143,6 +193,30 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(0, 21, 0),
     sessionDurationMinutes: 110,
     climbCount: 10,
+    climbedWithNames: ['Daniel Ong', 'Emily Koh'],
+  },
+  {
+    id: 'beta-10a',
+    type: 'send',
+    userId: 'user-1',
+    userName: 'Isaac Tan',
+    gymId: 'climb-central-kallang',
+    postedAt: daysAgo(0, 21, 15),
+    grade: '6b',
+    color: 'Blue',
+    wall: 'Lead Wall',
+  },
+  {
+    id: 'beta-10b',
+    type: 'send',
+    userId: 'user-1',
+    userName: 'Isaac Tan',
+    gymId: 'climb-central-kallang',
+    postedAt: daysAgo(0, 21, 40),
+    grade: '6c+',
+    color: 'Orange',
+    wall: 'Bouldering',
+    instagramUrl: 'https://www.instagram.com/reel/isaac-send2',
   },
   {
     id: 'beta-11',
@@ -192,6 +266,17 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     climbCount: 7,
   },
   {
+    id: 'beta-14a',
+    type: 'send',
+    userId: 'user-5',
+    userName: 'Ryan Lee',
+    gymId: 'fitbloc-depot',
+    postedAt: daysAgo(1, 19, 45),
+    grade: '6',
+    color: 'Green',
+    wall: 'Slab',
+  },
+  {
     id: 'beta-15',
     type: 'send',
     userId: 'user-1',
@@ -225,6 +310,18 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(0, 16, 0),
     sessionDurationMinutes: 100,
     climbCount: 11,
+    climbedWithNames: ['Emily Koh', 'Lisa Chen'],
+  },
+  {
+    id: 'beta-17a',
+    type: 'send',
+    userId: 'user-7',
+    userName: 'Daniel Ong',
+    gymId: 'boulder-planet-sembawang',
+    postedAt: daysAgo(0, 16, 30),
+    grade: '7',
+    color: 'Purple',
+    wall: 'Main Wall',
   },
   {
     id: 'beta-18',
@@ -260,6 +357,17 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     sessionDurationMinutes: 75,
     climbCount: 6,
   },
+  {
+    id: 'beta-20a',
+    type: 'send',
+    userId: 'user-3',
+    userName: 'Mike Lim',
+    gymId: 'fitbloc-maxwell',
+    postedAt: daysAgo(1, 12, 20),
+    grade: '5',
+    color: 'Blue',
+    wall: 'Slab',
+  },
 
   // Lighthouse
   {
@@ -285,6 +393,30 @@ export const MOCK_BETA_POSTS: BetaPost[] = [
     postedAt: daysAgo(1, 9, 0),
     sessionDurationMinutes: 100,
     climbCount: 9,
+    climbedWithNames: ['Isaac Tan'],
+  },
+  {
+    id: 'beta-22a',
+    type: 'send',
+    userId: 'user-4',
+    userName: 'Jessica Ng',
+    gymId: 'bff-climb-bendemeer',
+    postedAt: daysAgo(1, 9, 25),
+    grade: 'Red',
+    color: 'Red',
+    wall: 'Overhang',
+  },
+  {
+    id: 'beta-22b',
+    type: 'send',
+    userId: 'user-4',
+    userName: 'Jessica Ng',
+    gymId: 'bff-climb-bendemeer',
+    postedAt: daysAgo(1, 9, 50),
+    grade: 'Yellow',
+    color: 'Yellow',
+    wall: 'Slab',
+    instagramUrl: 'https://www.instagram.com/reel/jessica-send1',
   },
 ];
 
