@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Image } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
@@ -48,7 +48,14 @@ function FriendCard({ friend }: { friend: Friend }) {
 
 function AtGymSection({ friends }: { friends: Friend[] }) {
   if (friends.length === 0) return null;
-  
+
+  // Group friends by gym
+  const byGym = friends.reduce<Record<string, Friend[]>>((acc, f) => {
+    const key = f.currentGymId ?? 'unknown';
+    (acc[key] ??= []).push(f);
+    return acc;
+  }, {});
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -57,9 +64,28 @@ function AtGymSection({ friends }: { friends: Friend[] }) {
           <ThemedText style={styles.countText}>{friends.length}</ThemedText>
         </View>
       </View>
-      {friends.map((friend) => (
-        <FriendCard key={friend.id} friend={friend} />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.climbingNowRow}>
+        {friends.map((friend) => {
+          const gym = friend.currentGymId ? getGymById(friend.currentGymId) : null;
+          const gymShort = gym?.name?.replace(/^(Boulder\+|Boulder Planet|Climb Central|FitBloc|BFF Climb|Lighthouse)\s*/i, '') ?? '';
+          return (
+            <View key={friend.id} style={styles.climbingNowItem}>
+              <View style={styles.climbingNowAvatar}>
+                <ThemedText style={styles.climbingNowInitial}>
+                  {friend.displayName[0]}
+                </ThemedText>
+                <View style={styles.climbingNowDot} />
+              </View>
+              <ThemedText style={styles.climbingNowName} numberOfLines={1}>
+                {friend.displayName.split(' ')[0]}
+              </ThemedText>
+              <ThemedText style={styles.climbingNowGym} numberOfLines={1}>
+                {gymShort}
+              </ThemedText>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -84,33 +110,31 @@ function OfflineSection({ friends }: { friends: Friend[] }) {
 
 export default function FriendsScreen() {
   const friends = useSocialStore((state) => state.friends);
-  
+
   const friendsAtGym = friends.filter((f) => f.isAtGym);
   const friendsOffline = friends.filter((f) => !f.isAtGym);
-  
+
   return (
     <ThemedView style={styles.container}>
       <AppHeaderBanner title="Friends" />
+
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <ThemedText type="title">Friends</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            {friends.length} friends • {friendsAtGym.length} climbing now
-          </ThemedText>
-        </View>
-        
+        <ThemedText type="title" style={styles.pageTitle}>Friends</ThemedText>
+        <ThemedText style={styles.subtitle}>
+          {friends.length} friends · {friendsAtGym.length} climbing now
+        </ThemedText>
+
         {/* Add Friend Button */}
         <Pressable style={styles.addFriendButton}>
           <ThemedText style={styles.addFriendText}>+ Add Friend</ThemedText>
         </Pressable>
-        
+
         {/* Friends at Gym */}
         <AtGymSection friends={friendsAtGym} />
-        
+
         {/* Offline Friends */}
         <OfflineSection friends={friendsOffline} />
-        
+
         {friends.length === 0 && (
           <View style={styles.emptyState}>
             <ThemedText style={styles.emptyEmoji}>👋</ThemedText>
@@ -134,15 +158,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 24,
+    paddingTop: 12,
   },
-  header: {
-    marginBottom: 16,
+
+  pageTitle: {
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
     opacity: 0.6,
-    marginTop: 4,
+    marginBottom: 16,
   },
   addFriendButton: {
     backgroundColor: '#0a7ea4',
@@ -156,6 +181,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+
+  // Sections
   section: {
     marginBottom: 24,
   },
@@ -184,6 +211,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+
+  // Climbing Now horizontal row
+  climbingNowRow: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingVertical: 4,
+  },
+  climbingNowItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  climbingNowAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#22c55e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  climbingNowInitial: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  climbingNowDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  climbingNowName: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  climbingNowGym: {
+    fontSize: 10,
+    opacity: 0.55,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+
+  // Friend card
   friendCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -249,6 +325,8 @@ const styles = StyleSheet.create({
   messageButtonText: {
     fontSize: 20,
   },
+
+  // Empty state
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,

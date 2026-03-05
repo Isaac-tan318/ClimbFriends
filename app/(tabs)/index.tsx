@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
 import {Device} from '@/constants/device';
-import { AppColors } from '@/constants/theme';
+import { AppColors, Colors } from '@/constants/theme';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { LogClimbModal } from '@/components/log-climb-modal';
@@ -14,6 +14,10 @@ import { useSessionStore } from '@/stores';
 import { useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS } from '@/data';
 import { ClimbingSession, Friend, LoggedClimb } from '@/types';
+import {
+  getAllRecentBetaPosts,
+  BetaPost,
+} from '@/data/mock-beta';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -626,6 +630,8 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
   );
 }
 
+type HomeTab = 'tracker' | 'feed';
+
 export default function HomeScreen() {
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
@@ -636,6 +642,11 @@ export default function HomeScreen() {
   const plannedVisits = useSocialStore((state) => state.plannedVisits);
   const friends = useSocialStore((state) => state.friends);
 
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+  const colors = Colors[colorScheme];
+
+  const [homeTab, setHomeTab] = useState<HomeTab>('tracker');
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
   const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
@@ -750,10 +761,153 @@ export default function HomeScreen() {
     ? `Come climb with me at ${inviteGymName} right now!`
     : `Come climb with me at ${inviteGymName}`;
 
+  const recentPosts = useMemo(() => getAllRecentBetaPosts(30), []);
+
+  const mutedText = isDark ? '#999' : '#666';
+  const cardBorder = isDark ? AppColors.border.dark : AppColors.border.light;
+  const surfaceBg = isDark ? AppColors.surface.dark : AppColors.surface.light;
+
+  const feedFormatDuration = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return `${m}m`;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  };
+
+  const renderFeedPost = ({ item }: { item: BetaPost }) => {
+    const initials = item.userName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase();
+    const timeAgo = formatDistanceToNow(item.postedAt, { addSuffix: true });
+    const firstName = item.userName.split(' ')[0];
+    const gym = getGymById(item.gymId);
+    const gymLabel = gym?.name ?? item.gymId;
+
+    return (
+      <View style={styles.postCard}>
+        {/* Header */}
+        <View style={styles.feedHeaderRow}>
+          <View style={[styles.feedAvatar, { backgroundColor: AppColors.avatarFallbackBg }]}>
+            <Text style={[styles.feedAvatarText, { color: AppColors.avatarFallbackText }]}>
+              {initials}
+            </Text>
+          </View>
+          <View style={styles.feedHeaderText}>
+            <Text style={[styles.feedUserName, { color: colors.text }]}>{item.userName}</Text>
+            <Text style={[styles.feedMeta, { color: mutedText }]}>{gymLabel} · {timeAgo}</Text>
+          </View>
+        </View>
+
+        {/* Title */}
+        <Text style={[styles.feedTitle, { color: colors.text }]}>
+          {item.type === 'session'
+            ? `${firstName} climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`
+            : `${firstName} sent a ${item.grade ?? ''} ${item.color ?? ''}!`}
+        </Text>
+
+        {/* Metrics */}
+        <View style={styles.feedMetricsRow}>
+          {item.type === 'session' ? (
+            <>
+              <View style={styles.feedMetric}>
+                <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Time</Text>
+                <Text style={[styles.feedMetricValue, { color: colors.text }]}>
+                  {feedFormatDuration(item.sessionDurationMinutes ?? 0)}
+                </Text>
+              </View>
+              <View style={styles.feedMetric}>
+                <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Climbs logged</Text>
+                <Text style={[styles.feedMetricValue, { color: colors.text }]}>
+                  {item.climbCount ?? 0}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {item.grade != null && (
+                <View style={styles.feedMetric}>
+                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Grade</Text>
+                  <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.grade}</Text>
+                </View>
+              )}
+              {item.color != null && (
+                <View style={styles.feedMetric}>
+                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Color</Text>
+                  <View style={styles.feedColorRow}>
+                    <View style={[styles.feedColorDot, { backgroundColor: getColorHex(item.color) }]} />
+                    <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.color}</Text>
+                  </View>
+                </View>
+              )}
+              {item.wall != null && (
+                <View style={styles.feedMetric}>
+                  <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Wall</Text>
+                  <Text style={[styles.feedMetricValue, { color: colors.text }]}>{item.wall}</Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* Instagram placeholder */}
+        {item.type === 'send' && item.instagramUrl ? (
+          <View style={[styles.igPlaceholder, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
+            <Text style={styles.igIcon}>📷</Text>
+            <Text style={[styles.igText, { color: mutedText }]}>Instagram Reel</Text>
+            <Text style={[styles.igUrl, { color: AppColors.primary }]} numberOfLines={1}>
+              {item.instagramUrl}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.postDivider, { backgroundColor: cardBorder }]} />
+      </View>
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <AppHeaderBanner title="Home" />
 
+      {/* Top Tab Switcher */}
+      <View style={styles.topTabRow}>
+        <Pressable
+          style={[
+            styles.topTabButton,
+            homeTab === 'tracker' && styles.topTabButtonActive,
+          ]}
+          onPress={() => setHomeTab('tracker')}
+        >
+          <Text
+            style={[
+              styles.topTabLabel,
+              { color: homeTab === 'tracker' ? AppColors.primary : (isDark ? '#888' : '#999') },
+            ]}
+          >
+            Tracker
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.topTabButton,
+            homeTab === 'feed' && styles.topTabButtonActive,
+          ]}
+          onPress={() => setHomeTab('feed')}
+        >
+          <Text
+            style={[
+              styles.topTabLabel,
+              { color: homeTab === 'feed' ? AppColors.primary : (isDark ? '#888' : '#999') },
+            ]}
+          >
+            Feed
+          </Text>
+        </Pressable>
+      </View>
+
+      {homeTab === 'tracker' ? (
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Current Session */}
         <View style={styles.section}>
@@ -817,6 +971,24 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
+      ) : (
+        <FlatList
+          data={recentPosts}
+          keyExtractor={(p) => p.id}
+          renderItem={renderFeedPost}
+          contentContainerStyle={styles.feedListContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.feedEmptyState}>
+              <ThemedText style={styles.feedEmptyEmoji}>🧗</ThemedText>
+              <ThemedText style={styles.feedEmptyText}>No posts yet</ThemedText>
+              <ThemedText style={styles.feedEmptySubtext}>
+                Recent activity from the community will show up here.
+              </ThemedText>
+            </View>
+          }
+        />
+      )}
 
       {/* Gym Picker Modal */}
       <GymPickerModal
@@ -849,6 +1021,21 @@ export default function HomeScreen() {
       )}
     </ThemedView>
   );
+}
+
+function getColorHex(colorName: string): string {
+  const map: Record<string, string> = {
+    White: '#e5e7eb',
+    Yellow: '#eab308',
+    Red: '#ef4444',
+    Blue: '#3b82f6',
+    Purple: '#8b5cf6',
+    Green: '#22c55e',
+    Pink: '#ec4899',
+    Black: '#111',
+    Orange: '#f97316',
+  };
+  return map[colorName] ?? '#999';
 }
 
 const styles = StyleSheet.create({
@@ -1472,6 +1659,145 @@ const styles = StyleSheet.create({
   },
   inviteeCount: {
     fontSize: 13,
+  },
+
+  /* ── Top tab switcher ── */
+  topTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+    gap: 24,
+  },
+  topTabButton: {
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  topTabButtonActive: {
+    borderBottomColor: AppColors.primary,
+  },
+  topTabLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  /* ── Feed styles ── */
+  feedListContent: {
+    paddingTop: 4,
+    paddingBottom: 32,
+  },
+  postCard: {
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+  },
+  feedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  feedAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 9999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  feedAvatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  feedHeaderText: {
+    flex: 1,
+  },
+  feedUserName: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  feedMeta: {
+    fontSize: 13,
+    marginLeft: 8,
+    marginTop: 1,
+    opacity: 0.8,
+  },
+  feedTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  feedMetricsRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    gap: 48,
+    marginBottom: 12,
+  },
+  feedMetric: {
+    alignItems: 'flex-start',
+  },
+  feedMetricLabel: {
+    fontSize: 13,
+    opacity: 0.9,
+    marginBottom: 2,
+  },
+  feedMetricValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  feedColorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  feedColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  postDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: 8,
+  },
+  igPlaceholder: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+  igIcon: {
+    fontSize: 28,
+  },
+  igText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  igUrl: {
+    fontSize: 11,
+  },
+  feedEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  feedEmptyEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  feedEmptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  feedEmptySubtext: {
+    fontSize: 14,
+    opacity: 0.6,
+    textAlign: 'center',
   },
 });
 

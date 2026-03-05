@@ -307,3 +307,9 @@ export const getUniqueWallsForGym = (gymId: string): string[] => {
     .map((p) => p.wall!);
   return [...new Set(walls)];
 };
+
+export const getAllRecentBetaPosts = (limit = 30): BetaPost[] => {
+  return [...MOCK_BETA_POSTS]
+    .sort((a, b) => b.postedAt.getTime() - a.postedAt.getTime())
+    .slice(0, limit);
+};
