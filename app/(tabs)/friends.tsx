@@ -119,10 +119,6 @@ export default function FriendsScreen() {
       <AppHeaderBanner title="Friends" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <ThemedText type="title" style={styles.pageTitle}>Friends</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          {friends.length} friends · {friendsAtGym.length} climbing now
-        </ThemedText>
 
         {/* Add Friend Button */}
         <Pressable style={styles.addFriendButton}>
