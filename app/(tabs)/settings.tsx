@@ -32,13 +32,388 @@ const BANNER_COLOR = '#7dd3c4';
 
 // ─── Achievement badges ─────────────────────────────────────────────────────
 
-const ACHIEVEMENTS = [
-  { id: 'first-session', emoji: '🧗', label: 'First Session', unlocked: true },
-  { id: 'streak-3', emoji: '🔥', label: '3-Day Streak', unlocked: true },
-  { id: 'send-10', emoji: '💪', label: '10 Sends', unlocked: true },
-  { id: 'early-bird', emoji: '🌅', label: 'Early Bird', unlocked: false },
-  { id: 'social-climber', emoji: '👥', label: 'Social Climber', unlocked: false },
+type Achievement = {
+  id: string;
+  emoji: string;
+  label: string;
+  description: string;
+  xp?: number;
+  unlocked: boolean;
+};
+
+type AchievementCategory = {
+  id: string;
+  title: string;
+  hideDescription?: boolean;
+  achievements: Achievement[];
+};
+
+const ACHIEVEMENT_CATEGORIES: AchievementCategory[] = [
+  {
+    id: 'exploration',
+    title: 'Exploration',
+    achievements: [
+      {
+        id: 'first-contact',
+        emoji: '🧭',
+        label: 'First Contact',
+        xp: 50,
+        description: 'Log your very first gym session on the app.',
+        unlocked: true,
+      },
+      {
+        id: 'east-coast-plan',
+        emoji: '🌅',
+        label: 'East Coast Plan',
+        xp: 150,
+        description: 'Visit three different gyms in the East (BFF Tampines OTH, BFF Yoha, Climb@T3, Upwall Climbing).',
+        unlocked: false,
+      },
+      {
+        id: 'journey-to-the-west',
+        emoji: '🌄',
+        label: 'Journey to the west',
+        xp: 150,
+        description: 'Visit three different gyms in the West (Boulder+ Chervons, Climb Central Chua Chu Kang, Fitbloc Depot Heights, Fitbloc Kent Ridge, Lighthouse Climbing, Z-Vertigo Boulder Gym).',
+        unlocked: false,
+      },
+      {
+        id: 'northern-attitude',
+        emoji: '❄️',
+        label: 'Northern attitude',
+        description: 'Visit three different gyms in the North/North East (Boulder Planet Sembawang, Boulder Planet Taiseng, Boulder Movement Taiseng, Ark Bloc).',
+        unlocked: false,
+      },
+      {
+        id: 'sendtral',
+        emoji: '🏙️',
+        label: 'Sendtral',
+        xp: 150,
+        description: 'Visit three different gyms in Central Singapore (Kinetics Climbing, Ground Up Climbing, OYEYO Boulder Home, Boulder Movement Rochor, Climb Central Kallang, Outpost Climbing).',
+        unlocked: false,
+      },
+      {
+        id: 'south',
+        emoji: '🌴',
+        label: 'South',
+        xp: 150,
+        description: 'Visit three different gyms in the South/CBD area (Climba, Boulder Movement Downtown, Boulder Movement Bugis, Climb Central Funan).',
+        unlocked: false,
+      },
+      {
+        id: 'island-hopper',
+        emoji: '🗺️',
+        label: 'Island Hopper',
+        xp: 150,
+        description: 'Visit at least one gym in the North, South, East, West, and Central regions.',
+        unlocked: false,
+      },
+      {
+        id: 'how-did-we-get-here',
+        emoji: '🧗‍♂️',
+        label: 'How did we get here?',
+        xp: 1000,
+        description: 'Visit every single climbing gym in Singapore.',
+        unlocked: false,
+      },
+    ],
+  },
+  {
+    id: 'grind-badges',
+    title: 'Grind Badges',
+    achievements: [
+      {
+        id: 'dawn-patrol',
+        emoji: '🌤️',
+        label: 'Dawn Patrol',
+        xp: 100,
+        description: 'Enter a gym before 10:30 AM.',
+        unlocked: true,
+      },
+      {
+        id: 'night-owl',
+        emoji: '🌙',
+        label: 'Night Owl',
+        xp: 100,
+        description: 'Stay at a gym till late (after 10:00 PM).',
+        unlocked: false,
+      },
+      {
+        id: 'weekend-warrior',
+        emoji: '📅',
+        label: 'Weekend Warrior',
+        xp: 100,
+        description: 'Log a session on both Saturday and Sunday in the same weekend.',
+        unlocked: false,
+      },
+      {
+        id: 'regular-showerf',
+        emoji: '🫧',
+        label: 'Regular showerf',
+        xp: 500,
+        description: 'Climb at least 3 days a week for 4 weeks in a row.',
+        unlocked: false,
+      },
+      {
+        id: 'well-hydrated',
+        emoji: '💧',
+        label: 'Well hydrated',
+        xp: 500,
+        description: 'Log 100 or more total hours of climbing.',
+        unlocked: false,
+      },
+      {
+        id: 'extraterrestrial',
+        emoji: '👽',
+        label: 'Extraterrestrial',
+        xp: 1500,
+        description: 'Log 100 sessions in a single Boulder Planet outlet.',
+        unlocked: false,
+      },
+      {
+        id: 'umai',
+        emoji: '🍜',
+        label: 'Umai!',
+        xp: 1500,
+        description: 'Log 100 sessions in a single Climba outlet.',
+        unlocked: false,
+      },
+      {
+        id: 'jiggle-jiggle-jiggle',
+        emoji: '🪩',
+        label: 'Jiggle Jiggle Jiggle',
+        xp: 1500,
+        description: 'Log 100 sessions in a single Boulder Movement outlet.',
+        unlocked: false,
+      },
+      {
+        id: 'illuminator',
+        emoji: '💡',
+        label: 'The Illuminator',
+        xp: 1500,
+        description: 'Log 100 sessions in a single Lighthouse Climbing outlet.',
+        unlocked: false,
+      },
+      {
+        id: 'center-stage',
+        emoji: '🎭',
+        label: 'Center Stage',
+        xp: 1500,
+        description: 'Log 100 sessions in a single Climb Central outlet.',
+        unlocked: false,
+      },
+    ],
+  },
+  {
+    id: 'community',
+    title: 'Community',
+    achievements: [
+      {
+        id: 'climbfriend',
+        emoji: '🤝',
+        label: 'ClimbFriend',
+        xp: 50,
+        description: 'Add your first friend on the app.',
+        unlocked: true,
+      },
+      {
+        id: 'buddy-climbs',
+        emoji: '👯',
+        label: 'Buddy climbs',
+        xp: 100,
+        description: 'Climb at the same gym with a friend for at least 2 hours.',
+        unlocked: false,
+      },
+      {
+        id: 'squads',
+        emoji: '🫂',
+        label: 'Squads',
+        xp: 200,
+        description: 'Have a session where 4 or more mutual friends are at the same gym at the same time.',
+        unlocked: false,
+      },
+      {
+        id: 'five-stack',
+        emoji: '🖐️',
+        label: 'Five stack',
+        xp: 300,
+        description: 'Send out a session invite that 4 or more people accept and actually attend.',
+        unlocked: false,
+      },
+      {
+        id: 'full-lobby',
+        emoji: '🎮',
+        label: 'Full lobby',
+        xp: 1000,
+        description: 'Send out a session invite that 10 or more people accept and actually attend.',
+        unlocked: false,
+      },
+      {
+        id: 'last-warning',
+        emoji: '📣',
+        label: 'Last warning',
+        xp: 1500,
+        description: 'Send out a session invite that 25 or more people accept and actually attend.',
+        unlocked: false,
+      },
+      {
+        id: 'fifty-plus',
+        emoji: '❓',
+        label: '?????????????',
+        xp: 5000,
+        description: 'Send out a session invite that 50 or more people accept and actually attend.',
+        unlocked: false,
+      },
+      {
+        id: 'where-have-you-been',
+        emoji: '📩',
+        label: 'Where have you been?',
+        description: 'Invite a friend that you have not climbed with for at least 3 months, and actually attend.',
+        unlocked: false,
+      },
+    ],
+  },
+  {
+    id: 'progression-badges',
+    title: 'Progression Badges',
+    achievements: [
+      {
+        id: 'breaking-the-plateau',
+        emoji: '📈',
+        label: 'Breaking the Plateau',
+        xp: 100,
+        description: 'Manually log a new max grade for the first time (e.g., moving from BM3 to BM4, or V3 to V4).',
+        unlocked: false,
+      },
+      {
+        id: 'stoned',
+        emoji: '🪨',
+        label: 'Stoned',
+        xp: 500,
+        description: 'Log 42 hours specifically at high-wall gyms (like Climb Central Sports Hub or Ground Up).',
+        unlocked: false,
+      },
+      {
+        id: 'flash-master',
+        emoji: '⚡',
+        label: 'Flash Master',
+        xp: 250,
+        description: 'Log a session where you flashed a route at your max grade.',
+        unlocked: false,
+      },
+      {
+        id: 'system-calibrator',
+        emoji: '🎛️',
+        label: 'System Calibrator',
+        description: 'Log 10 benchmark problems on a system board of your choice.',
+        unlocked: false,
+      },
+      {
+        id: 'creative-space',
+        emoji: '🎨',
+        label: 'Creative Space',
+        description: 'Set and log 5 custom boulder problems on the spray wall.',
+        unlocked: false,
+      },
+      {
+        id: 'rock-solid',
+        emoji: '🧱',
+        label: 'Rock Solid',
+        description: 'Do 50 consecutive moves on the endurance wall/spray wall.',
+        unlocked: false,
+      },
+      {
+        id: 'strong-contender',
+        emoji: '🏆',
+        label: 'Strong Contender',
+        description: 'Complete a competition style boulder on the comp wall.',
+        unlocked: false,
+      },
+    ],
+  },
+  {
+    id: 'fun-hidden',
+    title: 'Fun / Easter Eggs (Hidden Badges)',
+    hideDescription: true,
+    achievements: [
+      {
+        id: 'crowd-surfer',
+        emoji: '🌊',
+        label: 'Crowd Surfer',
+        xp: 100,
+        description: 'Enter a gym when the app live map marks it as Very Crowded.',
+        unlocked: false,
+      },
+      {
+        id: 'ghost-town',
+        emoji: '👻',
+        label: 'Ghost Town',
+        xp: 100,
+        description: 'Enter a gym when you are the only person using the app there.',
+        unlocked: false,
+      },
+      {
+        id: 'rest-days-are-a-myth',
+        emoji: '🩹',
+        label: 'Rest Days Are A Myth',
+        xp: 200,
+        description: 'Log a gym session 7 days in a row.',
+        unlocked: false,
+      },
+      {
+        id: 'the-end-question',
+        emoji: '🔚',
+        label: 'The End?',
+        description: 'Climb at least one highest graded route in every gym in Singapore.',
+        unlocked: false,
+      },
+      {
+        id: 'the-beginning-question',
+        emoji: '🚩',
+        label: 'The beginning?',
+        description: 'Enter a local comp for the first time in any category (Novice-open).',
+        unlocked: false,
+      },
+      {
+        id: 'the-beginning',
+        emoji: '🥇',
+        label: 'The beginning',
+        description: 'Win a local comp for the first time in any category (Novice-open).',
+        unlocked: false,
+      },
+      {
+        id: 'the-end',
+        emoji: '🏁',
+        label: 'The End',
+        description: 'Win a local comp for the first time in open category.',
+        unlocked: false,
+      },
+      {
+        id: 'top-of-the-world',
+        emoji: '🌍',
+        label: 'Top of the world',
+        description: 'Enter and win an international comp of any discipline (boulder, lead, speed climb).',
+        unlocked: false,
+      },
+      {
+        id: 'overkill',
+        emoji: '💥',
+        label: 'Overkill',
+        description: 'Flash all the routes in a local comp for bouldering in any category.',
+        unlocked: false,
+      },
+      {
+        id: 'over-overkill',
+        emoji: '☄️',
+        label: 'Over-Overkill',
+        description: 'Flash all the routes in an international comp for bouldering.',
+        unlocked: false,
+      },
+    ],
+  },
 ];
+
+const ALL_ACHIEVEMENTS = ACHIEVEMENT_CATEGORIES.flatMap((category) => category.achievements);
 
 // ─── Level system ───────────────────────────────────────────────────────────
 
@@ -242,7 +617,8 @@ export default function ProfileScreen() {
   const weeklyHours = useMemo(() => generateWeeklyHoursData(mySessions), [mySessions]);
   const monthlySends = useMemo(() => generateMonthlySendsData(mySessions), [mySessions]);
 
-  const unlockedCount = ACHIEVEMENTS.filter((a) => a.unlocked).length;
+  const unlockedAchievements = ALL_ACHIEVEMENTS.filter((a) => a.unlocked);
+  const unlockedCount = unlockedAchievements.length;
 
   return (
     <ThemedView style={styles.container}>
@@ -270,7 +646,7 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.badgesRow}>
-              {ACHIEVEMENTS.filter((a) => a.unlocked).map((ach) => (
+              {unlockedAchievements.slice(0, 5).map((ach) => (
                 <View key={ach.id} style={[styles.badge, { backgroundColor: '#7c3aed' }]}>
                   <Text style={styles.badgeEmoji}>{ach.emoji}</Text>
                 </View>
@@ -439,34 +815,63 @@ export default function ProfileScreen() {
 
                 {/* Achievements */}
                 <ThemedText style={styles.achievementsTitle}>
-                  Achievements ({unlockedCount}/{ACHIEVEMENTS.length})
+                  Achievements ({unlockedCount}/{ALL_ACHIEVEMENTS.length})
                 </ThemedText>
 
-                {ACHIEVEMENTS.map((ach) => (
-                  <View
-                    key={ach.id}
-                    style={[
-                      styles.achievementCard,
-                      { backgroundColor: cardBg, borderColor, opacity: ach.unlocked ? 1 : 0.45 },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.achievementIcon,
-                        { backgroundColor: ach.unlocked ? '#7c3aed' : (isDark ? '#333' : '#d1d5db') },
-                      ]}
-                    >
-                      <Text style={styles.achievementEmoji}>{ach.emoji}</Text>
+                {ACHIEVEMENT_CATEGORIES.map((category) => {
+                  const categoryUnlocked = category.achievements.filter((ach) => ach.unlocked).length;
+                  return (
+                    <View key={category.id} style={styles.achievementCategorySection}>
+                      <View style={styles.achievementCategoryHeader}>
+                        <ThemedText style={styles.achievementCategoryTitle}>{category.title}</ThemedText>
+                        <ThemedText style={styles.achievementCategoryCount}>
+                          {categoryUnlocked}/{category.achievements.length}
+                        </ThemedText>
+                      </View>
+
+                      {category.achievements.map((ach) => (
+                        <View
+                          key={ach.id}
+                          style={[
+                            styles.achievementCard,
+                            { backgroundColor: cardBg, borderColor, opacity: ach.unlocked ? 1 : 0.45 },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.achievementIcon,
+                              { backgroundColor: ach.unlocked ? '#7c3aed' : (isDark ? '#333' : '#d1d5db') },
+                            ]}
+                          >
+                            <Text style={styles.achievementEmoji}>{ach.emoji}</Text>
+                          </View>
+                          <View style={styles.achievementInfo}>
+                            <View style={styles.achievementHeadingRow}>
+                              <ThemedText style={styles.achievementLabel}>{ach.label}</ThemedText>
+                              {typeof ach.xp === 'number' && (
+                                <View
+                                  style={[
+                                    styles.achievementXpChip,
+                                    { backgroundColor: ach.unlocked ? '#ede9fe' : (isDark ? '#333' : '#f3f4f6') },
+                                  ]}
+                                >
+                                  <Text style={styles.achievementXpText}>{ach.xp.toLocaleString()} XP</Text>
+                                </View>
+                              )}
+                            </View>
+                            <ThemedText style={styles.achievementStatus}>
+                              {ach.unlocked ? 'Unlocked' : 'Locked'}
+                            </ThemedText>
+                            <ThemedText style={styles.achievementDescription}>
+                              {category.hideDescription ? 'Hidden badge. Unlock condition is secret.' : ach.description}
+                            </ThemedText>
+                          </View>
+                          {ach.unlocked && <Text style={styles.achievementCheck}>✓</Text>}
+                        </View>
+                      ))}
                     </View>
-                    <View style={styles.achievementInfo}>
-                      <ThemedText style={styles.achievementLabel}>{ach.label}</ThemedText>
-                      <ThemedText style={styles.achievementStatus}>
-                        {ach.unlocked ? 'Unlocked' : 'Locked'}
-                      </ThemedText>
-                    </View>
-                    {ach.unlocked && <Text style={styles.achievementCheck}>✓</Text>}
-                  </View>
-                ))}
+                  );
+                })}
               </>
             )}
           </View>
@@ -626,9 +1031,18 @@ const styles = StyleSheet.create({
   xpRowVal: { fontSize: 14, fontWeight: '600' },
 
   achievementsTitle: { fontSize: 17, fontWeight: '700', marginBottom: 12 },
+  achievementCategorySection: { marginBottom: 14 },
+  achievementCategoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  achievementCategoryTitle: { fontSize: 15, fontWeight: '700' },
+  achievementCategoryCount: { fontSize: 12, opacity: 0.55 },
   achievementCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderRadius: 12,
     borderWidth: 1,
     padding: 14,
@@ -644,9 +1058,17 @@ const styles = StyleSheet.create({
   },
   achievementEmoji: { fontSize: 20 },
   achievementInfo: { flex: 1 },
+  achievementHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  achievementXpChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  achievementXpText: { fontSize: 11, fontWeight: '700', color: AppColors.primary },
   achievementLabel: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  achievementStatus: { fontSize: 12, opacity: 0.5 },
-  achievementCheck: { fontSize: 18, color: '#22c55e', fontWeight: 'bold' },
+  achievementStatus: { fontSize: 12, opacity: 0.5, marginBottom: 4 },
+  achievementDescription: { fontSize: 12, opacity: 0.72, lineHeight: 17 },
+  achievementCheck: { fontSize: 18, color: '#22c55e', fontWeight: 'bold', marginLeft: 8, marginTop: 2 },
 
   emptyState: { alignItems: 'center', paddingVertical: 48 },
   emptyEmoji: { fontSize: 44, marginBottom: 10 },
