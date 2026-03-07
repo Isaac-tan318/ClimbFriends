@@ -653,6 +653,9 @@ function AnimatedPodium({
   entries: LeaderboardEntry[];
   currentUserId: string;
 }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const textColor = colorScheme === 'dark' ? '#f1f1f1' : '#111';
+  const mutedColor = colorScheme === 'dark' ? '#aaa' : '#666';
   const top3 = entries.slice(0, 3);
   const thirdAnim = useRef(new Animated.Value(0)).current;
   const secondAnim = useRef(new Animated.Value(0)).current;
@@ -714,7 +717,8 @@ function AnimatedPodium({
             <Text
               style={[
                 styles.podiumName,
-                isUser && { color: AppColors.primary, fontWeight: '700' },
+                { color: isUser ? AppColors.primary : textColor },
+                isUser && { fontWeight: '700' },
               ]}
               numberOfLines={1}
             >
@@ -722,7 +726,7 @@ function AnimatedPodium({
             </Text>
 
             {/* Hours */}
-            <Text style={styles.podiumHours}>
+            <Text style={[styles.podiumHours, { color: mutedColor }]}>
               {Math.round(entry.totalMinutes / 6) / 10}h
             </Text>
 
@@ -747,6 +751,9 @@ function AnimatedPodium({
 
 /* ── Gym Podium (top 3 gyms) ── */
 function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const textColor = colorScheme === 'dark' ? '#f1f1f1' : '#111';
+  const mutedColor = colorScheme === 'dark' ? '#aaa' : '#666';
   const top3 = entries.slice(0, 3);
   const thirdAnim = useRef(new Animated.Value(0)).current;
   const secondAnim = useRef(new Animated.Value(0)).current;
@@ -804,12 +811,12 @@ function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
             </View>
 
             {/* Name */}
-            <Text style={styles.podiumName} numberOfLines={1}>
+            <Text style={[styles.podiumName, { color: textColor }]} numberOfLines={1}>
               {shortGymName}
             </Text>
 
             {/* Hours */}
-            <Text style={styles.podiumHours}>
+            <Text style={[styles.podiumHours, { color: mutedColor }]}>
               {Math.round(entry.totalMinutes / 60)}h
             </Text>
 
