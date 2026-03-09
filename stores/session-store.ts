@@ -24,7 +24,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   startSession: (gymId) => {
     const newSession: ClimbingSession = {
       id: `session-${Date.now()}`,
-      oderId: 'user-1',
+      userId: 'user-1',
       gymId,
       startedAt: new Date(),
       endedAt: null,
@@ -99,12 +99,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
   
   getUserSessions: (userId) => {
-    return get().sessions.filter((s) => s.oderId === userId);
+    return get().sessions.filter((s) => s.userId === userId);
   },
   
   getRecentSessions: (limit = 10) => {
     return get()
-      .sessions.filter((s) => s.oderId === 'user-1')
+      .sessions.filter((s) => s.userId === 'user-1')
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
       .slice(0, limit);
   },

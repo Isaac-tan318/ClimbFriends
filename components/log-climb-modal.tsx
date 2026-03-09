@@ -246,6 +246,7 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
     const [color, setColor] = useState('');
     const [wall, setWall] = useState('');
     const [instagramUrl, setInstagramUrl] = useState('');
+    const [isBodyAtTop, setIsBodyAtTop] = useState(true);
 
     const translateY = useSharedValue(800);
     const backdropOpacity = useSharedValue(0);
@@ -276,6 +277,7 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
             setColor('');
             setWall('');
             setInstagramUrl('');
+            setIsBodyAtTop(true);
             translateY.value = 800;
             backdropOpacity.value = 0;
             translateY.value = withSpring(0, { overshootClamping: true });
@@ -292,9 +294,10 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
         });
     }, [translateY, backdropOpacity, handleDismissComplete]);
 
-    const dragGesture = useMemo(
-        () =>
+    const createDragGesture = useCallback(
+        (enabled: boolean) =>
             Gesture.Pan()
+                .enabled(enabled)
                 .activeOffsetY(5)
                 .onUpdate((event) => {
                     if (event.translationY > 0) {
@@ -309,6 +312,15 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
                     }
                 }),
         [translateY, dismissModal],
+    );
+
+    const dragGesture = useMemo(
+        () => createDragGesture(isBodyAtTop),
+        [createDragGesture, isBodyAtTop],
+    );
+    const handleDragGesture = useMemo(
+        () => createDragGesture(true),
+        [createDragGesture],
     );
 
     const backdropAnimatedStyle = useAnimatedStyle(() => ({
@@ -345,14 +357,15 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
                         <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
                     </Reanimated.View>
 
-                    <Reanimated.View
-                        style={[styles.sheet, { backgroundColor: modalBg }, sheetAnimatedStyle]}
-                    >
-                        <GestureDetector gesture={dragGesture}>
-                            <View>
-                                <View style={styles.handle} />
-                            </View>
-                        </GestureDetector>
+                    <GestureDetector gesture={dragGesture}>
+                        <Reanimated.View
+                            style={[styles.sheet, { backgroundColor: modalBg }, sheetAnimatedStyle]}
+                        >
+                            <GestureDetector gesture={handleDragGesture}>
+                                <View>
+                                    <View style={styles.handle} />
+                                </View>
+                            </GestureDetector>
 
                         {/* Header */}
                         <View style={styles.header}>
@@ -378,6 +391,8 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
                             contentContainerStyle={styles.bodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={false}
+                            onScroll={(e) => setIsBodyAtTop(e.nativeEvent.contentOffset.y <= 0)}
+                            scrollEventThrottle={16}
                         >
                             {/* Grade */}
                             <View style={styles.fieldGroup}>
@@ -506,7 +521,8 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
                             />
                         </View>
                         </ScrollView>
-                    </Reanimated.View>
+                        </Reanimated.View>
+                    </GestureDetector>
                 </KeyboardAvoidingView>
             </GestureHandlerRootView>
         </Modal>

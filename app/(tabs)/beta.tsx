@@ -35,7 +35,7 @@ export default function BetaScreen() {
     if (activeSession?.gymId) return activeSession.gymId;
 
     // Otherwise pick the gym user-1 visits most
-    const userSessions = sessions.filter((s) => s.oderId === 'user-1');
+    const userSessions = sessions.filter((s) => s.userId === 'user-1');
     const counts: Record<string, number> = {};
     userSessions.forEach((s) => {
       counts[s.gymId] = (counts[s.gymId] ?? 0) + 1;
@@ -72,7 +72,7 @@ export default function BetaScreen() {
 
   // ─── Gyms sorted: active first, then most-visited, then rest ────────────
   const sortedGyms = useMemo(() => {
-    const userSessions = sessions.filter((s) => s.oderId === 'user-1');
+    const userSessions = sessions.filter((s) => s.userId === 'user-1');
     const counts: Record<string, number> = {};
     userSessions.forEach((s) => {
       counts[s.gymId] = (counts[s.gymId] ?? 0) + 1;

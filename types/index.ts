@@ -26,7 +26,7 @@ export interface LoggedClimb {
 
 export interface ClimbingSession {
   id: string;
-  oderId: string;
+  userId: string;
   gymId: string;
   startedAt: Date;
   endedAt: Date | null;

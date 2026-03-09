@@ -113,72 +113,73 @@ export function GymDrawer({
       </Reanimated.View>
 
       {/* Sheet */}
-      <Reanimated.View style={[styles.drawer, { backgroundColor: modalBg }, sheetAnimatedStyle]}>
-        {/* Drag handle */}
-        <GestureDetector gesture={dragGesture}>
+      <GestureDetector gesture={dragGesture}>
+        <Reanimated.View style={[styles.drawer, { backgroundColor: modalBg }, sheetAnimatedStyle]}>
+          {/* Drag handle */}
           <View style={styles.drawerHandleArea}>
             <View style={styles.drawerHandle} />
           </View>
-        </GestureDetector>
+          
 
-        {/* Gym header */}
-        <View style={styles.drawerHeader}>
-          <View style={[styles.gymBrandBadge, { backgroundColor: brandColor }]}>
-            <ThemedText style={styles.gymBrandBadgeText}>{gym?.brand}</ThemedText>
+          {/* Gym header */}
+          <View style={styles.drawerHeader}>
+            <View style={[styles.gymBrandBadge, { backgroundColor: brandColor }]}>
+              <ThemedText style={styles.gymBrandBadgeText}>{gym?.brand}</ThemedText>
+            </View>
+            <ThemedText style={styles.drawerGymName}>{gym?.name}</ThemedText>
+            <View style={styles.drawerAddressRow}>
+              <MaterialIcons name="place" size={14} color="#9ca3af" style={{ marginRight: 4 }} />
+              <ThemedText style={styles.drawerGymAddress} numberOfLines={2}>
+                {gym?.address}
+              </ThemedText>
+            </View>
           </View>
-          <ThemedText style={styles.drawerGymName}>{gym?.name}</ThemedText>
-          <View style={styles.drawerAddressRow}>
-            <MaterialIcons name="place" size={14} color="#9ca3af" style={{ marginRight: 4 }} />
-            <ThemedText style={styles.drawerGymAddress} numberOfLines={2}>
-              {gym?.address}
+
+          {/* Divider */}
+          <View style={[styles.drawerDivider, { backgroundColor: borderColor }]} />
+
+          {/* Who's here */}
+          <View style={styles.drawerSection}>
+            <ThemedText style={styles.drawerSectionLabel}>
+              {friendsHere.length > 0
+                ? `${friendsHere.length} friend${friendsHere.length > 1 ? 's' : ''} climbing here`
+                : 'No friends here right now'}
             </ThemedText>
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={[styles.drawerDivider, { backgroundColor: borderColor }]} />
-
-        {/* Who's here */}
-        <View style={styles.drawerSection}>
-          <ThemedText style={styles.drawerSectionLabel}>
-            {friendsHere.length > 0
-              ? `${friendsHere.length} friend${friendsHere.length > 1 ? 's' : ''} climbing here`
-              : 'No friends here right now'}
-          </ThemedText>
-          {friendsHere.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.friendsAtGymRow}
-            >
-              {friendsHere.map((friend) => (
-                <View key={friend.id} style={styles.friendAtGymItem}>
-                  <View style={styles.friendAtGymAvatarWrap}>
-                    {friend.avatarUrl ? (
-                      <Image source={{ uri: friend.avatarUrl }} style={styles.friendAtGymAvatar} />
-                    ) : (
-                      <View style={styles.friendAtGymAvatarFallback}>
-                        <ThemedText style={styles.friendAtGymAvatarText}>
-                          {friend.displayName
-                            .split(' ')
-                            .map((w) => w[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </ThemedText>
-                      </View>
-                    )}
-                    <View style={styles.friendAtGymOnlineDot} />
+            {friendsHere.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.friendsAtGymRow}
+              >
+                {friendsHere.map((friend) => (
+                  <View key={friend.id} style={styles.friendAtGymItem}>
+                    <View style={styles.friendAtGymAvatarWrap}>
+                      {friend.avatarUrl ? (
+                        <Image source={{ uri: friend.avatarUrl }} style={styles.friendAtGymAvatar} />
+                      ) : (
+                        <View style={styles.friendAtGymAvatarFallback}>
+                          <ThemedText style={styles.friendAtGymAvatarText}>
+                            {friend.displayName
+                              .split(' ')
+                              .map((w) => w[0])
+                              .join('')
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </ThemedText>
+                        </View>
+                      )}
+                      <View style={styles.friendAtGymOnlineDot} />
+                    </View>
+                    <ThemedText style={styles.friendAtGymName} numberOfLines={1}>
+                      {friend.displayName.split(' ')[0]}
+                    </ThemedText>
                   </View>
-                  <ThemedText style={styles.friendAtGymName} numberOfLines={1}>
-                    {friend.displayName.split(' ')[0]}
-                  </ThemedText>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      </Reanimated.View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </Reanimated.View>
+      </GestureDetector>
     </View>
   );
 }

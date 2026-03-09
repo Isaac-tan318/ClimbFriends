@@ -17,7 +17,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // User 1 (Alex) sessions
   {
     id: 'session-1',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'boulder-plus-aperia',
     startedAt: daysAgo(1, 18, 0),
     endedAt: sessionDuration(daysAgo(1, 18, 0), 90),
@@ -26,7 +26,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-2',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'climb-central-kallang',
     startedAt: daysAgo(3, 19, 30),
     endedAt: sessionDuration(daysAgo(3, 19, 30), 120),
@@ -35,7 +35,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-3',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'boulder-plus-chevrons',
     startedAt: daysAgo(5, 10, 0),
     endedAt: sessionDuration(daysAgo(5, 10, 0), 75),
@@ -44,7 +44,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-4',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'fitbloc-depot',
     startedAt: daysAgo(8, 17, 0),
     endedAt: sessionDuration(daysAgo(8, 17, 0), 105),
@@ -53,7 +53,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-5',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'boulder-plus-aperia',
     startedAt: daysAgo(12, 19, 0),
     endedAt: sessionDuration(daysAgo(12, 19, 0), 60),
@@ -63,7 +63,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // User 2 (Sarah) sessions
   {
     id: 'session-6',
-    oderId: 'user-2',
+    userId: 'user-2',
     gymId: 'climb-central-kallang',
     startedAt: daysAgo(1, 17, 0),
     endedAt: sessionDuration(daysAgo(1, 17, 0), 110),
@@ -72,7 +72,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-7',
-    oderId: 'user-2',
+    userId: 'user-2',
     gymId: 'boulder-planet-taiseng',
     startedAt: daysAgo(4, 18, 30),
     endedAt: sessionDuration(daysAgo(4, 18, 30), 95),
@@ -82,7 +82,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // User 3 (Mike) sessions
   {
     id: 'session-8',
-    oderId: 'user-3',
+    userId: 'user-3',
     gymId: 'climb-central-funan',
     startedAt: daysAgo(2, 20, 0),
     endedAt: sessionDuration(daysAgo(2, 20, 0), 80),
@@ -91,7 +91,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-9',
-    oderId: 'user-3',
+    userId: 'user-3',
     gymId: 'climb-central-kallang',
     startedAt: daysAgo(6, 18, 0),
     endedAt: sessionDuration(daysAgo(6, 18, 0), 130),
@@ -101,7 +101,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // User 4 (Jessica) sessions
   {
     id: 'session-10',
-    oderId: 'user-4',
+    userId: 'user-4',
     gymId: 'bff-climb-bendemeer',
     startedAt: daysAgo(1, 9, 0),
     endedAt: sessionDuration(daysAgo(1, 9, 0), 100),
@@ -111,7 +111,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // User 5 (Ryan) sessions
   {
     id: 'session-11',
-    oderId: 'user-5',
+    userId: 'user-5',
     gymId: 'lighthouse-climbing',
     startedAt: daysAgo(3, 16, 0),
     endedAt: sessionDuration(daysAgo(3, 16, 0), 85),
@@ -121,7 +121,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   // More Alex sessions (older)
   {
     id: 'session-12',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'climb-central-novena',
     startedAt: daysAgo(15, 18, 30),
     endedAt: sessionDuration(daysAgo(15, 18, 30), 95),
@@ -130,7 +130,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
   {
     id: 'session-13',
-    oderId: 'user-1',
+    userId: 'user-1',
     gymId: 'boulder-planet-sembawang',
     startedAt: daysAgo(20, 11, 0),
     endedAt: sessionDuration(daysAgo(20, 11, 0), 70),
@@ -150,7 +150,7 @@ export const CURRENT_USER_STATS: UserStats = {
 };
 
 export const getUserSessions = (userId: string): ClimbingSession[] => {
-  return MOCK_SESSIONS.filter((s) => s.oderId === userId);
+  return MOCK_SESSIONS.filter((s) => s.userId === userId);
 };
 
 // MOCK_LEADERBOARD is the "Friends" leaderboard (current user + friends)

@@ -1,28 +1,25 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, useColorScheme, Text, Alert, Switch, StyleProp, ViewStyle } from 'react-native';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Reanimated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, Animated, useColorScheme, Text, Alert, Switch } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { format, formatDistanceToNow } from 'date-fns';
-import {Device} from '@/constants/device';
+import { format } from 'date-fns';
 import { AppColors, Colors } from '@/constants/theme';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
+import { ActiveSessionCard } from '@/components/home/active-session-card';
+import { FeedPostCard } from '@/components/home/feed-post-card';
+import { IdleSessionCard } from '@/components/home/idle-session-card';
+import { AnimatedPodium } from '@/components/leaderboard/animated-podium';
+import { RankLeaderboardCard } from '@/components/leaderboard/rank-leaderboard-card';
 import { LogClimbModal } from '@/components/log-climb-modal';
+import { BottomSheetDismiss, BottomSheetModal } from '@/components/shared/bottom-sheet-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useSessionStore } from '@/stores';
-import { useSocialStore } from '@/stores';
+import { useSessionStore, useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, MOCK_NATIONAL_LEADERBOARD, MOCK_GYM_LEADERBOARD, CURRENT_USER } from '@/data';
 import type { GymLeaderboardEntry } from '@/data/mock-sessions';
-import { ClimbingSession, Friend, LoggedClimb, LeaderboardEntry } from '@/types';
+import { ClimbingSession, Friend, LoggedClimb } from '@/types';
 import {
   getAllRecentBetaPosts,
   BetaPost,
@@ -52,14 +49,6 @@ function useElapsedTime(startedAt: Date | null) {
   return elapsed;
 }
 
-function formatElapsed(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(h)}:${pad(m)}:${pad(s)}`;
-}
-
 function formatDurationMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const mins = totalMinutes % 60;
@@ -80,200 +69,6 @@ function formatOrdinal(value: number): string {
   if (ones === 2) return `${value}nd`;
   if (ones === 3) return `${value}rd`;
   return `${value}th`;
-}
-
-type BottomSheetDismiss = (afterClose?: () => void) => void;
-type BottomSheetDragGesture = ReturnType<typeof Gesture.Pan>;
-
-type BottomSheetModalProps = {
-  visible: boolean;
-  onClose: () => void;
-  backgroundColor: string;
-  contentStyle?: StyleProp<ViewStyle>;
-  dismissThreshold?: number;
-  openBackdropDuration?: number;
-  children: ({
-    dismiss,
-    dragGesture,
-  }: {
-    dismiss: BottomSheetDismiss;
-    dragGesture: BottomSheetDragGesture;
-  }) => React.ReactNode;
-};
-
-function BottomSheetModal({
-  visible,
-  onClose,
-  backgroundColor,
-  contentStyle,
-  dismissThreshold = 400,
-  openBackdropDuration = 100,
-  children,
-}: BottomSheetModalProps) {
-  const translateY = useSharedValue(800);
-  const backdropOpacity = useSharedValue(0);
-  const onCloseRef = useRef(onClose);
-  const dismissAfterCloseRef = useRef<(() => void) | null>(null);
-  onCloseRef.current = onClose;
-  const handleDismissComplete = useCallback(() => {
-    onCloseRef.current();
-    dismissAfterCloseRef.current?.();
-    dismissAfterCloseRef.current = null;
-  }, []);
-
-  const dismiss = useCallback(
-    (afterClose?: () => void) => {
-      dismissAfterCloseRef.current = afterClose ?? null;
-      translateY.value = withSpring(800, { overshootClamping: true });
-      backdropOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
-        if (finished) {
-          runOnJS(handleDismissComplete)();
-        }
-      });
-    },
-    [translateY, backdropOpacity, handleDismissComplete],
-  );
-
-  useEffect(() => {
-    if (visible) {
-      translateY.value = 800;
-      backdropOpacity.value = 0;
-      translateY.value = withSpring(0, { overshootClamping: true });
-      backdropOpacity.value = withTiming(1, { duration: openBackdropDuration });
-    }
-  }, [visible, translateY, backdropOpacity, openBackdropDuration]);
-
-  const createDragGesture = useCallback(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY(5)
-        .onUpdate((event) => {
-          if (event.translationY > 0 && Math.abs(event.translationY) > Math.abs(event.translationX)) {
-            translateY.value = event.translationY;
-          }
-        })
-        .onEnd((event) => {
-          const isVerticalDrag = Math.abs(event.translationY) > Math.abs(event.translationX);
-          if (isVerticalDrag && (event.translationY > dismissThreshold || event.velocityY > 500)) {
-            runOnJS(dismiss)();
-          } else {
-            translateY.value = withSpring(0, { overshootClamping: true });
-          }
-        }),
-    [translateY, dismissThreshold, dismiss],
-  );
-
-  const handleDragGesture = useMemo(() => createDragGesture(), [createDragGesture]);
-  const titleDragGesture = useMemo(() => createDragGesture(), [createDragGesture]);
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
-
-  return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={() => dismiss()}>
-      <GestureHandlerRootView style={styles.modalOverlay}>
-        <Reanimated.View style={[styles.modalBackdrop, backdropAnimatedStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} />
-        </Reanimated.View>
-        <Reanimated.View style={[styles.modalSheetBase, { backgroundColor }, sheetAnimatedStyle, contentStyle]}>
-          <GestureDetector gesture={handleDragGesture}>
-            <View style={styles.bottomSheetDragHandleArea}>
-              <View style={styles.bottomSheetHandle} />
-            </View>
-          </GestureDetector>
-          {children({ dismiss, dragGesture: titleDragGesture })}
-        </Reanimated.View>
-      </GestureHandlerRootView>
-    </Modal>
-  );
-}
-
-function ActiveSessionCard({
-  gymName,
-  elapsed,
-  onEnd,
-  onLogClimb,
-  session,
-}: {
-  gymName: string;
-  elapsed: number;
-  onEnd: () => void;
-  onLogClimb: () => void;
-  session: ClimbingSession;
-}) {
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const gym = getGymById(session.gymId);
-  const gymLogoText = (gym?.brand || gym?.name || 'Gym')
-    .split(' ')
-    .map((word) => word[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <View style={[styles.activeCardContainer, { borderColor }]}>
-      {/* Live indicator */}
-      <View style={styles.liveIndicator}>
-        <View style={styles.liveDot} />
-        <ThemedText style={styles.liveText}>Live Session</ThemedText>
-      </View>
-
-      {/* Gym Info */}
-      <View style={styles.summaryHeaderRow}>
-        {gym?.imageUrl ? (
-          <Image source={{ uri: gym.imageUrl }} style={styles.summaryLogo} />
-        ) : (
-          <View style={styles.summaryLogoFallback}>
-            <ThemedText style={styles.summaryLogoText}>{gymLogoText}</ThemedText>
-          </View>
-        )}
-        <View style={styles.summaryHeaderText}>
-          <ThemedText style={styles.summarySubtitle} numberOfLines={2}>
-            {gymName}
-          </ThemedText>
-        </View>
-      </View>
-
-      {/* Timer */}
-      <View style={[styles.activeInfoBox, styles.timerBox, { borderColor, borderWidth: 0, padding: 24 }]}>
-        <ThemedText style={styles.timerText}>{formatElapsed(elapsed)}</ThemedText>
-      </View>
-
-      {/* End Session + Log Climb buttons */}
-      {/* Climb count */}
-      {(session.climbs?.length ?? 0) > 0 && (
-        <ThemedText style={{ fontSize: 13, opacity: 0.6, textAlign: 'center', marginBottom: 8 }}>
-          {session.climbs!.length} climb{session.climbs!.length !== 1 ? 's' : ''} logged
-        </ThemedText>
-      )}
-
-      <View style={styles.activeActions}>
-        <Pressable style={styles.logClimbButton} onPress={onLogClimb}>
-          <ThemedText style={styles.logClimbButtonText}>Log Climb</ThemedText>
-        </Pressable>
-        <Pressable style={[styles.endButton, { backgroundColor: '#fff', flexDirection: 'row', gap: 6 }]} onPress={onEnd}>
-          <View style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: 'black' }} />
-          <ThemedText style={[styles.endButtonText, { color: 'black' }]}>End Session</ThemedText>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function IdleSessionCard({ onStart }: { onStart: () => void }) {
-  const cardBg = useThemeColor({}, 'background');
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-
-  return (
-    <View style={[styles.idleCard, { backgroundColor: cardBg, borderColor }]}>
-      <ThemedText style={styles.idleTitle}>Not climbing currently</ThemedText>
-      <ThemedText style={styles.idleSubtitle}>
-        Start a session manually or let auto-detect find your gym
-      </ThemedText>
-      <Pressable style={styles.startButton} onPress={onStart}>
-        <ThemedText style={styles.startButtonText}>Start Climbing!</ThemedText>
-      </Pressable>
-    </View>
-  );
 }
 
 function SessionSummaryCard({
@@ -387,7 +182,7 @@ function GymPickerModal({
       dismissThreshold={500}
       openBackdropDuration={100}
     >
-      {({ dismiss, dragGesture }) => (
+      {({ dismiss, dragGesture, onBodyScroll }) => (
         <>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => dismiss()} style={styles.backButton}>
@@ -403,6 +198,8 @@ function GymPickerModal({
           <FlatList
             data={SINGAPORE_GYMS}
             keyExtractor={(item) => item.id}
+            onScroll={onBodyScroll}
+            scrollEventThrottle={16}
             renderItem={({ item }) => (
               <Pressable
                 style={[styles.gymPickerItem, { borderColor }]}
@@ -518,7 +315,7 @@ function FriendPickerModal({
       dismissThreshold={400}
       openBackdropDuration={300}
     >
-      {({ dismiss }) => (
+      {({ dismiss, onBodyScroll }) => (
         <>
           {/* Search bar */}
           <View style={styles.friendPickerSearchRow}>
@@ -526,7 +323,6 @@ function FriendPickerModal({
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
             <View style={[styles.friendPickerSearchBar, { backgroundColor: inputBg }]}>
-              <ThemedText style={styles.friendPickerSearchIcon}>🔍</ThemedText>
               <TextInput
                 style={[styles.friendPickerSearchInput, { color: textColor }]}
                 placeholder="Search"
@@ -543,6 +339,8 @@ function FriendPickerModal({
             keyExtractor={(item) => item.id}
             numColumns={3}
             contentContainerStyle={styles.friendGrid}
+            onScroll={onBodyScroll}
+            scrollEventThrottle={16}
             ListFooterComponent={
               <>
                 {/* Date/Time picker for Plan mode */}
@@ -664,111 +462,7 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
 type HomeTab = 'tracker' | 'feed' | 'ranks';
 type RankCategory = 'friends' | 'gyms' | 'national';
 
-/* ── Podium (top 3) with staggered animation: 3rd → 2nd → 1st ── */
-function AnimatedPodium({
-  entries,
-  currentUserId,
-}: {
-  entries: LeaderboardEntry[];
-  currentUserId: string;
-}) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const textColor = colorScheme === 'dark' ? '#f1f1f1' : '#111';
-  const mutedColor = colorScheme === 'dark' ? '#aaa' : '#666';
-  const top3 = entries.slice(0, 3);
-  const thirdAnim = useRef(new Animated.Value(0)).current;
-  const secondAnim = useRef(new Animated.Value(0)).current;
-  const firstAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    thirdAnim.setValue(0);
-    secondAnim.setValue(0);
-    firstAnim.setValue(0);
-    Animated.stagger(200, [
-      Animated.spring(thirdAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-      Animated.spring(secondAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-      Animated.spring(firstAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-    ]).start();
-  }, [entries]);
-
-  const podiumColors = ['#fbbf24', '#d1d5db', '#cd7f32']; // gold, silver, bronze
-  const podiumHeights = [120, 90, 70];
-  const animRefs = [firstAnim, secondAnim, thirdAnim];
-  // Display order: 3rd, 1st, 2nd (visually: left=3rd, center=1st, right=2nd)
-  const displayOrder = [2, 0, 1]; // indices into top3
-
-  if (top3.length < 3) return null;
-
-  return (
-    <View style={styles.podiumContainer}>
-      {displayOrder.map((idx) => {
-        const entry = top3[idx];
-        const anim = animRefs[idx];
-        const isUser = entry.userId === currentUserId;
-        const translateY = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [60, 0],
-        });
-
-        return (
-          <Animated.View
-            key={entry.userId}
-            style={[
-              styles.podiumSlot,
-              {
-                opacity: anim,
-                transform: [{ translateY }],
-              },
-            ]}
-          >
-            {/* Avatar */}
-            <View
-              style={[
-                styles.podiumAvatar,
-                { backgroundColor: isUser ? AppColors.primary : '#9ca3af' },
-                idx === 0 && styles.podiumAvatarFirst,
-              ]}
-            >
-              <Text style={styles.podiumAvatarText}>{entry.user.displayName[0]}</Text>
-            </View>
-
-            {/* Name */}
-            <Text
-              style={[
-                styles.podiumName,
-                { color: isUser ? AppColors.primary : textColor },
-                isUser && { fontWeight: '700' },
-              ]}
-              numberOfLines={1}
-            >
-              {entry.user.displayName.split(' ')[0]}
-            </Text>
-
-            {/* Hours */}
-            <Text style={[styles.podiumHours, { color: mutedColor }]}>
-              {Math.round(entry.totalMinutes / 6) / 10}h
-            </Text>
-
-            {/* Pedestal */}
-            <View
-              style={[
-                styles.podiumPedestal,
-                {
-                  height: podiumHeights[idx],
-                  backgroundColor: podiumColors[idx],
-                },
-              ]}
-            >
-              <Text style={styles.podiumRank}>#{idx + 1}</Text>
-            </View>
-          </Animated.View>
-        );
-      })}
-    </View>
-  );
-}
-
-/* ── Gym Podium (top 3 gyms) ── */
+/* Gym Podium (top 3 gyms) */
 function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
   const colorScheme = useColorScheme() ?? 'light';
   const textColor = colorScheme === 'dark' ? '#f1f1f1' : '#111';
@@ -787,7 +481,7 @@ function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
       Animated.spring(secondAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
       Animated.spring(firstAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
     ]).start();
-  }, [entries]);
+  }, [entries, firstAnim, secondAnim, thirdAnim]);
 
   const podiumColors = ['#fbbf24', '#d1d5db', '#cd7f32'];
   const podiumHeights = [120, 90, 70];
@@ -859,48 +553,6 @@ function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
 }
 
 /* ── Leaderboard card (ranks 4+) ── */
-function RankLeaderboardCard({ entry, isCurrentUser }: { entry: LeaderboardEntry; isCurrentUser: boolean }) {
-  const cardBg = useThemeColor({}, 'background');
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const highlightBg = useThemeColor({ light: '#eff6ff', dark: '#1e3a5f' }, 'background');
-
-  const hours = Math.round(entry.totalMinutes / 60 * 10) / 10;
-
-  return (
-    <View style={[
-      styles.lbCard,
-      { backgroundColor: isCurrentUser ? highlightBg : cardBg, borderColor },
-      isCurrentUser && styles.lbCurrentUserCard,
-    ]}>
-      <View style={[styles.lbRankBadge, { backgroundColor: '#f3f4f6' }]}>
-        <ThemedText style={styles.lbRankNumber}>#{entry.rank}</ThemedText>
-      </View>
-
-      <View style={[styles.lbAvatar, { backgroundColor: isCurrentUser ? '#0a7ea4' : '#9ca3af' }]}>
-        <ThemedText style={styles.lbAvatarText}>
-          {entry.user.displayName[0]}
-        </ThemedText>
-      </View>
-
-      <View style={styles.lbUserInfo}>
-        <ThemedText style={styles.lbUserName}>
-          {entry.user.displayName}
-          {isCurrentUser && <ThemedText style={styles.lbYouTag}> (You)</ThemedText>}
-        </ThemedText>
-        <ThemedText style={styles.lbUserStats}>
-          {entry.totalSessions} sessions
-        </ThemedText>
-      </View>
-
-      <View style={styles.lbHoursContainer}>
-        <ThemedText style={styles.lbHoursValue}>{hours}</ThemedText>
-        <ThemedText style={styles.lbHoursLabel}>hours</ThemedText>
-      </View>
-    </View>
-  );
-}
-
-/* ── Gym leaderboard card (ranks 4+) ── */
 function GymLeaderboardCard({ entry }: { entry: GymLeaderboardEntry }) {
   const cardBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
@@ -973,8 +625,6 @@ export default function HomeScreen() {
   const [publishDescription, setPublishDescription] = useState('');
   const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
   const [hasPublished, setHasPublished] = useState(false);
-
-  const displayedSummarySession = lastEndedSession;
 
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
 
@@ -1149,148 +799,25 @@ export default function HomeScreen() {
   const cardBorder = isDark ? AppColors.border.dark : AppColors.border.light;
   const surfaceBg = isDark ? AppColors.surface.dark : AppColors.surface.light;
 
-  const feedFormatDuration = (mins: number) => {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    if (h === 0) return `${m}m`;
-    return m === 0 ? `${h}h` : `${h}h ${m}m`;
-  };
-
-  const renderFeedPost = ({ item }: { item: BetaPost }) => {
-    const initials = item.userName
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase();
-    const timeAgo = formatDistanceToNow(item.postedAt, { addSuffix: true });
-    const firstName = item.userName.split(' ')[0];
-    const gym = getGymById(item.gymId);
-    const gymLabel = gym?.name ?? item.gymId;
-
-    const hasSends = (item.climbCount ?? 0) > 0;
-    const isExpanded = expandedPosts.has(item.id);
-    const sends = hasSends ? (sendsLookup.get(`${item.userId}__${item.gymId}`) ?? []) : [];
-
-    return (
-      <View style={styles.postCard}>
-        {/* Header */}
-        <View style={styles.feedHeaderRow}>
-          <View style={[styles.feedAvatar, { backgroundColor: AppColors.avatarFallbackBg }]}>
-            <Text style={[styles.feedAvatarText, { color: AppColors.avatarFallbackText }]}>
-              {initials}
-            </Text>
-          </View>
-          <View style={styles.feedHeaderText}>
-            <Text style={[styles.feedUserName, { color: colors.text }]}>{item.userName}</Text>
-            <Text style={[styles.feedMeta, { color: mutedText }]}>{gymLabel} · {timeAgo}</Text>
-          </View>
-        </View>
-
-        {/* Title */}
-        <Text style={[styles.feedTitle, { color: colors.text }]}>
-          {`${firstName} climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`}
-        </Text>
-
-        {/* Metrics */}
-        <View style={styles.feedMetricsRow}>
-          <View style={styles.feedMetric}>
-            <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Time</Text>
-            <Text style={[styles.feedMetricValue, { color: colors.text }]}>
-              {feedFormatDuration(item.sessionDurationMinutes ?? 0)}
-            </Text>
-          </View>
-          <View style={styles.feedMetric}>
-            <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Climbs logged</Text>
-            <Text style={[styles.feedMetricValue, { color: colors.text }]}>
-              {item.climbCount ?? 0}
-            </Text>
-          </View>
-        </View>
-
-        {/* Climbed with */}
-        {item.climbedWithNames && item.climbedWithNames.length > 0 && (
-          <View style={styles.feedClimbedWithRow}>
-            <View style={styles.feedClimbedWithAvatars}>
-              {item.climbedWithNames.map((name, i) => (
-                <View
-                  key={name}
-                  style={[
-                    styles.feedClimbedWithCircle,
-                    { marginLeft: i > 0 ? -8 : 0, backgroundColor: AppColors.avatarFallbackBg },
-                  ]}
-                >
-                  <Text style={[styles.feedClimbedWithInitial, { color: AppColors.avatarFallbackText }]}>
-                    {name[0]}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text style={[styles.feedClimbedWithText, { color: mutedText }]}>
-              with {item.climbedWithNames.map((n) => n.split(' ')[0]).join(', ')}
-            </Text>
-          </View>
-        )}
-
-        {/* Show Sends button */}
-        {hasSends && sends.length > 0 && (
-          <>
-            <Pressable
-              style={[styles.showSendsBtn, { borderColor: cardBorder }]}
-              onPress={() => togglePostExpanded(item.id)}
-            >
-              <Text style={[styles.showSendsBtnText, { color: AppColors.primary }]}>
-                {isExpanded ? 'Hide Sends' : `Show Sends (${sends.length})`}
-              </Text>
-              <MaterialIcons
-                name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                size={18}
-                color={AppColors.primary}
-              />
-            </Pressable>
-
-            {isExpanded && sends.map((send) => (
-              <View key={send.id} style={[styles.sendCard, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
-                <View style={styles.sendRow}>
-                  {send.grade != null && (
-                    <View style={styles.feedMetric}>
-                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Grade</Text>
-                      <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.grade}</Text>
-                    </View>
-                  )}
-                  {send.color != null && (
-                    <View style={styles.feedMetric}>
-                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Color</Text>
-                      <View style={styles.feedColorRow}>
-                        <View style={[styles.feedColorDot, { backgroundColor: getColorHex(send.color) }]} />
-                        <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.color}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {send.wall != null && (
-                    <View style={styles.feedMetric}>
-                      <Text style={[styles.feedMetricLabel, { color: mutedText }]}>Wall</Text>
-                      <Text style={[styles.feedMetricValue, { color: colors.text }]}>{send.wall}</Text>
-                    </View>
-                  )}
-                </View>
-                {send.instagramUrl ? (
-                  <View style={[styles.igPlaceholder, { backgroundColor: surfaceBg, borderColor: cardBorder }]}>
-                    <Text style={styles.igIcon}>📷</Text>
-                    <Text style={[styles.igText, { color: mutedText }]}>Instagram Reel</Text>
-                    <Text style={[styles.igUrl, { color: AppColors.primary }]} numberOfLines={1}>
-                      {send.instagramUrl}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            ))}
-          </>
-        )}
-
-        <View style={[styles.postDivider, { backgroundColor: cardBorder }]} />
-      </View>
-    );
-  };
+  const renderFeedPostItem = useCallback(
+    ({ item }: { item: BetaPost }) => {
+      const sends = sendsLookup.get(`${item.userId}__${item.gymId}`) ?? [];
+      return (
+        <FeedPostCard
+          item={item}
+          isExpanded={expandedPosts.has(item.id)}
+          sends={sends}
+          textColor={colors.text}
+          mutedText={mutedText}
+          cardBorder={cardBorder}
+          surfaceBg={surfaceBg}
+          onToggleExpanded={togglePostExpanded}
+          getColorHex={getColorHex}
+        />
+      );
+    },
+    [expandedPosts, sendsLookup, colors.text, mutedText, cardBorder, surfaceBg, togglePostExpanded],
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -1395,7 +922,7 @@ export default function HomeScreen() {
         <FlatList
           data={recentPosts}
           keyExtractor={(p) => p.id}
-          renderItem={renderFeedPost}
+          renderItem={renderFeedPostItem}
           contentContainerStyle={styles.feedListContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
@@ -2090,7 +1617,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   friendPickerSearchIcon: {
     fontSize: 16,
@@ -2679,4 +2205,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

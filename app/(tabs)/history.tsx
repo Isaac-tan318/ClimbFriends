@@ -68,7 +68,7 @@ export default function HistoryScreen() {
   const [filter, setFilter] = useState<FilterPeriod>('all');
   const allSessions = useSessionStore((state) => state.sessions);
   const sessions = useMemo(
-    () => allSessions.filter((s) => s.oderId === 'user-1'),
+    () => allSessions.filter((s) => s.userId === 'user-1'),
     [allSessions]
   );
   

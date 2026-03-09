@@ -591,7 +591,7 @@ export default function ProfileScreen() {
   const mySessions = useMemo(
     () =>
       allSessions
-        .filter((s) => s.oderId === 'user-1')
+        .filter((s) => s.userId === 'user-1')
         .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
     [allSessions],
   );
