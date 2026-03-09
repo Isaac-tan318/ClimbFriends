@@ -1,5 +1,13 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, PanResponder, useColorScheme, Text, Alert, Switch, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, Modal, FlatList, Image, TextInput, Animated, useColorScheme, Text, Alert, Switch, StyleProp, ViewStyle } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format, formatDistanceToNow } from 'date-fns';
 import {Device} from '@/constants/device';
@@ -75,7 +83,7 @@ function formatOrdinal(value: number): string {
 }
 
 type BottomSheetDismiss = (afterClose?: () => void) => void;
-type BottomSheetDragPanHandlers = ReturnType<typeof PanResponder.create>['panHandlers'];
+type BottomSheetDragGesture = ReturnType<typeof Gesture.Pan>;
 
 type BottomSheetModalProps = {
   visible: boolean;
@@ -86,10 +94,10 @@ type BottomSheetModalProps = {
   openBackdropDuration?: number;
   children: ({
     dismiss,
-    dragPanHandlers,
+    dragGesture,
   }: {
     dismiss: BottomSheetDismiss;
-    dragPanHandlers: BottomSheetDragPanHandlers;
+    dragGesture: BottomSheetDragGesture;
   }) => React.ReactNode;
 };
 
@@ -102,70 +110,79 @@ function BottomSheetModal({
   openBackdropDuration = 100,
   children,
 }: BottomSheetModalProps) {
-  const translateY = useRef(new Animated.Value(800)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(800);
+  const backdropOpacity = useSharedValue(0);
   const onCloseRef = useRef(onClose);
   const dismissAfterCloseRef = useRef<(() => void) | null>(null);
   onCloseRef.current = onClose;
+  const handleDismissComplete = useCallback(() => {
+    onCloseRef.current();
+    dismissAfterCloseRef.current?.();
+    dismissAfterCloseRef.current = null;
+  }, []);
 
   const dismiss = useCallback(
     (afterClose?: () => void) => {
       dismissAfterCloseRef.current = afterClose ?? null;
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 800, overshootClamping: true, useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-      ]).start(() => {
-        onCloseRef.current();
-        dismissAfterCloseRef.current?.();
-        dismissAfterCloseRef.current = null;
+      translateY.value = withSpring(800, { overshootClamping: true });
+      backdropOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
+        if (finished) {
+          runOnJS(handleDismissComplete)();
+        }
       });
     },
-    [translateY, backdropOpacity],
+    [translateY, backdropOpacity, handleDismissComplete],
   );
 
   useEffect(() => {
     if (visible) {
-      translateY.setValue(800);
-      backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: openBackdropDuration, useNativeDriver: true }),
-      ]).start();
+      translateY.value = 800;
+      backdropOpacity.value = 0;
+      translateY.value = withSpring(0, { overshootClamping: true });
+      backdropOpacity.value = withTiming(1, { duration: openBackdropDuration });
     }
   }, [visible, translateY, backdropOpacity, openBackdropDuration]);
 
-  const panResponder = useMemo(
+  const createDragGesture = useCallback(
     () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
-        onPanResponderMove: (_, gs) => {
-          if (gs.dy > 0) translateY.setValue(gs.dy);
-        },
-        onPanResponderRelease: (_, gs) => {
-          if (gs.dy > dismissThreshold || gs.vy > 0.5) {
-            dismiss();
-          } else {
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+      Gesture.Pan()
+        .activeOffsetY(5)
+        .onUpdate((event) => {
+          if (event.translationY > 0 && Math.abs(event.translationY) > Math.abs(event.translationX)) {
+            translateY.value = event.translationY;
           }
-        },
-      }),
+        })
+        .onEnd((event) => {
+          const isVerticalDrag = Math.abs(event.translationY) > Math.abs(event.translationX);
+          if (isVerticalDrag && (event.translationY > dismissThreshold || event.velocityY > 500)) {
+            runOnJS(dismiss)();
+          } else {
+            translateY.value = withSpring(0, { overshootClamping: true });
+          }
+        }),
     [translateY, dismissThreshold, dismiss],
   );
 
+  const handleDragGesture = useMemo(() => createDragGesture(), [createDragGesture]);
+  const titleDragGesture = useMemo(() => createDragGesture(), [createDragGesture]);
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={() => dismiss()}>
-      <View style={styles.modalOverlay}>
-        <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
+      <GestureHandlerRootView style={styles.modalOverlay}>
+        <Reanimated.View style={[styles.modalBackdrop, backdropAnimatedStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} />
-        </Animated.View>
-        <Animated.View style={[styles.modalSheetBase, { backgroundColor, transform: [{ translateY }] }, contentStyle]}>
-          <View style={styles.bottomSheetDragHandleArea} {...panResponder.panHandlers}>
-            <View style={styles.bottomSheetHandle} />
-          </View>
-          {children({ dismiss, dragPanHandlers: panResponder.panHandlers })}
-        </Animated.View>
-      </View>
+        </Reanimated.View>
+        <Reanimated.View style={[styles.modalSheetBase, { backgroundColor }, sheetAnimatedStyle, contentStyle]}>
+          <GestureDetector gesture={handleDragGesture}>
+            <View style={styles.bottomSheetDragHandleArea}>
+              <View style={styles.bottomSheetHandle} />
+            </View>
+          </GestureDetector>
+          {children({ dismiss, dragGesture: titleDragGesture })}
+        </Reanimated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -370,15 +387,17 @@ function GymPickerModal({
       dismissThreshold={500}
       openBackdropDuration={100}
     >
-      {({ dismiss, dragPanHandlers }) => (
+      {({ dismiss, dragGesture }) => (
         <>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => dismiss()} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
             </Pressable>
-            <View style={styles.modalHeaderTitleDragZone} {...dragPanHandlers}>
-              <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
-            </View>
+            <GestureDetector gesture={dragGesture}>
+              <View style={styles.modalHeaderTitleDragZone}>
+                <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
+              </View>
+            </GestureDetector>
             <View style={styles.backButtonSpacer} />
           </View>
           <FlatList
@@ -1537,12 +1556,14 @@ export default function HomeScreen() {
         dismissThreshold={100}
         openBackdropDuration={100}
       >
-        {({ dismiss, dragPanHandlers }) => (
+        {({ dismiss, dragGesture }) => (
           <>
             <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderTitleDragZone} {...dragPanHandlers}>
-                <ThemedText type="subtitle">Publish Session</ThemedText>
-              </View>
+              <GestureDetector gesture={dragGesture}>
+                <View style={styles.modalHeaderTitleDragZone}>
+                  <ThemedText type="subtitle">Publish Session</ThemedText>
+                </View>
+              </GestureDetector>
               <Pressable onPress={() => dismiss()}>
                 <ThemedText style={styles.modalClose}>✕</ThemedText>
               </Pressable>

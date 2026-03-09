@@ -4,10 +4,16 @@ import {
   View,
   Pressable,
   ScrollView,
-  Animated,
-  PanResponder,
   Image,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -41,47 +47,58 @@ export function GymDrawer({
 }) {
   const modalBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const translateY = useRef(new Animated.Value(600)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(600);
+  const backdropOpacity = useSharedValue(0);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const handleDismissComplete = useCallback(() => {
+    onCloseRef.current();
+  }, []);
 
   useEffect(() => {
     if (visible) {
-      translateY.setValue(600);
-      backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, overshootClamping: true, useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
+      translateY.value = 600;
+      backdropOpacity.value = 0;
+      translateY.value = withSpring(0, { overshootClamping: true });
+      backdropOpacity.value = withTiming(1, { duration: 200 });
     }
   }, [visible, translateY, backdropOpacity]);
 
   const dismiss = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(translateY, { toValue: 600, overshootClamping: true, useNativeDriver: true }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => onCloseRef.current());
-  }, [translateY, backdropOpacity]);
+    translateY.value = withSpring(600, { overshootClamping: true });
+    backdropOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) {
+        runOnJS(handleDismissComplete)();
+      }
+    });
+  }, [translateY, backdropOpacity, handleDismissComplete]);
 
-  const panResponder = useMemo(
+  const dragGesture = useMemo(
     () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
-        onPanResponderMove: (_, gs) => {
-          if (gs.dy > 0) translateY.setValue(gs.dy);
-        },
-        onPanResponderRelease: (_, gs) => {
-          if (gs.dy > 100 || gs.vy > 0.5) {
-            dismiss();
-          } else {
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+      Gesture.Pan()
+        .activeOffsetY(5)
+        .onUpdate((event) => {
+          if (event.translationY > 0) {
+            translateY.value = event.translationY;
           }
-        },
-      }),
+        })
+        .onEnd((event) => {
+          if (event.translationY > 100 || event.velocityY > 500) {
+            runOnJS(dismiss)();
+          } else {
+            translateY.value = withSpring(0, { overshootClamping: true });
+          }
+        }),
     [translateY, dismiss],
   );
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   if (!visible && !gym) return null;
 
@@ -91,16 +108,18 @@ export function GymDrawer({
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
-      <Animated.View style={[styles.drawerBackdrop, { opacity: backdropOpacity }]}>
+      <Reanimated.View style={[styles.drawerBackdrop, backdropAnimatedStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-      </Animated.View>
+      </Reanimated.View>
 
       {/* Sheet */}
-      <Animated.View style={[styles.drawer, { backgroundColor: modalBg, transform: [{ translateY }] }]}>
+      <Reanimated.View style={[styles.drawer, { backgroundColor: modalBg }, sheetAnimatedStyle]}>
         {/* Drag handle */}
-        <View {...panResponder.panHandlers} style={styles.drawerHandleArea}>
-          <View style={styles.drawerHandle} />
-        </View>
+        <GestureDetector gesture={dragGesture}>
+          <View style={styles.drawerHandleArea}>
+            <View style={styles.drawerHandle} />
+          </View>
+        </GestureDetector>
 
         {/* Gym header */}
         <View style={styles.drawerHeader}>
@@ -159,7 +178,7 @@ export function GymDrawer({
             </ScrollView>
           )}
         </View>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }

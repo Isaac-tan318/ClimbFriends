@@ -419,16 +419,7 @@ const ALL_ACHIEVEMENTS = ACHIEVEMENT_CATEGORIES.flatMap((category) => category.a
 
 function getLevelInfo(totalMinutes: number, totalSessions: number) {
   const xp = totalMinutes + totalSessions * 50;
-  if (xp >= 5000) return { level: 10, tier: 'Legend', xp, nextXp: 5000, progress: 1 };
-  if (xp >= 4000) return { level: 9, tier: 'Master', xp, nextXp: 5000, progress: (xp - 4000) / 1000 };
-  if (xp >= 3200) return { level: 8, tier: 'Expert', xp, nextXp: 4000, progress: (xp - 3200) / 800 };
-  if (xp >= 2500) return { level: 7, tier: 'Advanced', xp, nextXp: 3200, progress: (xp - 2500) / 700 };
-  if (xp >= 1900) return { level: 6, tier: 'Experienced', xp, nextXp: 2500, progress: (xp - 1900) / 600 };
-  if (xp >= 1400) return { level: 5, tier: 'Intermediate', xp, nextXp: 1900, progress: (xp - 1400) / 500 };
-  if (xp >= 1000) return { level: 4, tier: 'Developing', xp, nextXp: 1400, progress: (xp - 1000) / 400 };
-  if (xp >= 650) return { level: 3, tier: 'Beginner', xp, nextXp: 1000, progress: (xp - 650) / 350 };
-  if (xp >= 300) return { level: 2, tier: 'Newbie', xp, nextXp: 650, progress: (xp - 300) / 350 };
-  return { level: 1, tier: 'Noob', xp, nextXp: 300, progress: xp / 300 };
+  return { level: 4, tier: 'Noob', xp, nextXp: 1400, progress: (xp - 1000) / 400 };
 }
 
 // ─── Mock graph data generators ─────────────────────────────────────────────

@@ -6,12 +6,18 @@ import {
     Modal,
     TextInput,
     ScrollView,
-    Animated,
-    PanResponder,
     KeyboardAvoidingView,
     Platform,
     Switch,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -34,7 +40,7 @@ const CLIMB_COLORS = [
 ];
 
 // ---------------------------------------------------------------------------
-// GradeSlider – horizontal discrete step slider
+// GradeSlider - horizontal discrete step slider
 // ---------------------------------------------------------------------------
 const THUMB_SIZE = 24;
 
@@ -49,115 +55,118 @@ function GradeSlider({
 }) {
     const trackBg = useThemeColor({ light: '#e5e7eb', dark: '#3a3a3a' }, 'background');
     const [trackWidth, setTrackWidth] = useState(0);
-    const thumbX = useRef(new Animated.Value(0)).current;
-    const startX = useRef(0);
+    const thumbX = useSharedValue(0);
+    const startX = useSharedValue(0);
     const isDragging = useRef(false);
-
-    // Keep refs in sync so the stable panResponder closure always reads latest values
-    const trackWidthRef = useRef(trackWidth);
-    trackWidthRef.current = trackWidth;
-    const gradesRef = useRef(grades);
-    gradesRef.current = grades;
-    const onChangeRef = useRef(onChange);
-    onChangeRef.current = onChange;
-    const valueRef = useRef(value);
-    valueRef.current = value;
+    const lastIdx = useSharedValue(0);
 
     const indexOfValue = useMemo(() => {
         const i = grades.indexOf(value);
         return i >= 0 ? i : 0;
     }, [grades, value]);
 
-    // Thumb center position for a given step index (0 → trackWidth)
+    // Thumb center position for a given step index (0 -> trackWidth)
     const xForIndex = useCallback(
         (i: number, tw?: number) => {
-            const w = tw ?? trackWidthRef.current;
-            const len = gradesRef.current.length;
+            const w = tw ?? trackWidth;
+            const len = grades.length;
             if (len <= 1 || w === 0) return 0;
             return (i / (len - 1)) * w;
         },
-        [],
+        [trackWidth, grades.length],
+    );
+
+    const setDragging = useCallback((next: boolean) => {
+        isDragging.current = next;
+    }, []);
+
+    const emitIndexChange = useCallback(
+        (idx: number) => {
+            const next = grades[idx];
+            if (next !== undefined) onChange(next);
+        },
+        [grades, onChange],
     );
 
     // Sync thumb position when value or trackWidth changes (skip during drag)
     useEffect(() => {
         if (trackWidth > 0 && !isDragging.current) {
-            Animated.spring(thumbX, {
-                toValue: xForIndex(indexOfValue, trackWidth),
-                useNativeDriver: false,
+            thumbX.value = withSpring(xForIndex(indexOfValue, trackWidth), {
                 overshootClamping: true,
-            }).start();
+            });
         }
-    }, [indexOfValue, trackWidth, xForIndex, thumbX]);
+        lastIdx.value = indexOfValue;
+    }, [indexOfValue, trackWidth, xForIndex, thumbX, lastIdx]);
 
-    const snapToNearest = useCallback(
-        (rawX: number) => {
-            const tw = trackWidthRef.current;
-            const g = gradesRef.current;
-            if (tw === 0) return;
-            const clamped = Math.max(0, Math.min(tw, rawX));
-            const step = tw / (g.length - 1);
-            const idx = Math.max(0, Math.min(g.length - 1, Math.round(clamped / step)));
-            onChangeRef.current(g[idx]);
-            Animated.spring(thumbX, {
-                toValue: xForIndex(idx, tw),
-                useNativeDriver: false,
-                overshootClamping: true,
-            }).start();
-        },
-        [thumbX, xForIndex],
+    // Stable pan gesture that supports dragging from anywhere on the track.
+    const sliderGesture = useMemo(
+        () =>
+            Gesture.Pan()
+                .minDistance(0)
+                .onBegin((event) => {
+                    runOnJS(setDragging)(true);
+                    const gradeCount = grades.length;
+                    if (trackWidth <= 0 || gradeCount === 0) return;
+
+                    // Jump thumb to touch location immediately.
+                    const touchX = event.x - THUMB_SIZE / 2; // offset for outer padding
+                    const clamped = Math.max(0, Math.min(trackWidth, touchX));
+                    startX.value = clamped;
+                    thumbX.value = clamped;
+
+                    const idx = gradeCount <= 1
+                        ? 0
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(clamped / (trackWidth / (gradeCount - 1)))));
+                    if (idx !== lastIdx.value) {
+                        lastIdx.value = idx;
+                        runOnJS(emitIndexChange)(idx);
+                    }
+                })
+                .onUpdate((event) => {
+                    const gradeCount = grades.length;
+                    if (trackWidth <= 0 || gradeCount === 0) return;
+
+                    const rawX = Math.max(0, Math.min(trackWidth, startX.value + event.translationX));
+                    thumbX.value = rawX;
+
+                    const idx = gradeCount <= 1
+                        ? 0
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (trackWidth / (gradeCount - 1)))));
+                    if (idx !== lastIdx.value) {
+                        lastIdx.value = idx;
+                        runOnJS(emitIndexChange)(idx);
+                    }
+                })
+                .onEnd((event) => {
+                    runOnJS(setDragging)(false);
+                    const gradeCount = grades.length;
+                    if (trackWidth <= 0 || gradeCount === 0) return;
+
+                    const rawX = Math.max(0, Math.min(trackWidth, startX.value + event.translationX));
+                    const idx = gradeCount <= 1
+                        ? 0
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (trackWidth / (gradeCount - 1)))));
+                    if (idx !== lastIdx.value) {
+                        lastIdx.value = idx;
+                        runOnJS(emitIndexChange)(idx);
+                    }
+                    thumbX.value = withSpring(xForIndex(idx, trackWidth), {
+                        overshootClamping: true,
+                    });
+                })
+                .onFinalize(() => {
+                    runOnJS(setDragging)(false);
+                }),
+        [trackWidth, grades.length, thumbX, startX, lastIdx, emitIndexChange, setDragging, xForIndex],
     );
 
-    // Stable panResponder — never recreated during drag
-    // Attached to the outer track wrapper so dragging anywhere on the track works
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderGrant: (e) => {
-                isDragging.current = true;
-                // Jump thumb to touch location immediately
-                const touchX = e.nativeEvent.locationX - THUMB_SIZE / 2; // offset for outer padding
-                const tw = trackWidthRef.current;
-                const clamped = Math.max(0, Math.min(tw, touchX));
-                startX.current = clamped;
-                thumbX.setValue(clamped);
-                const g = gradesRef.current;
-                const step = tw / (g.length - 1);
-                const idx = Math.max(0, Math.min(g.length - 1, Math.round(clamped / step)));
-                onChangeRef.current(g[idx]);
-            },
-            onPanResponderMove: (_, gs) => {
-                const tw = trackWidthRef.current;
-                const g = gradesRef.current;
-                const rawX = Math.max(0, Math.min(tw, startX.current + gs.dx));
-                thumbX.setValue(rawX);
-                const step = tw / (g.length - 1);
-                const idx = Math.max(0, Math.min(g.length - 1, Math.round(rawX / step)));
-                onChangeRef.current(g[idx]);
-            },
-            onPanResponderRelease: (_, gs) => {
-                isDragging.current = false;
-                const tw = trackWidthRef.current;
-                const g = gradesRef.current;
-                const rawX = Math.max(0, Math.min(tw, startX.current + gs.dx));
-                const step = tw / (g.length - 1);
-                const idx = Math.max(0, Math.min(g.length - 1, Math.round(rawX / step)));
-                onChangeRef.current(g[idx]);
-                Animated.spring(thumbX, {
-                    toValue: xForIndex(idx, tw),
-                    useNativeDriver: false,
-                    overshootClamping: true,
-                }).start();
-            },
-        }),
-    ).current;
+    const filledAnimatedStyle = useAnimatedStyle(() => ({
+        width: Math.max(0, Math.min(trackWidth, thumbX.value)),
+    }), [trackWidth]);
 
-    const filledWidth = thumbX.interpolate({
-        inputRange: [0, Math.max(1, trackWidth)],
-        outputRange: [0, trackWidth],
-        extrapolate: 'clamp',
-    });
+    const thumbAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: thumbX.value }],
+    }));
 
     return (
         <View style={styles.sliderContainer}>
@@ -166,48 +175,47 @@ function GradeSlider({
                 <ThemedText style={styles.sliderValueText}>{value || grades[0]}</ThemedText>
             </View>
 
-            {/* Outer wrapper — pan responder on entire track area for drag anywhere */}
-            <View
-                style={styles.sliderOuter}
-                {...panResponder.panHandlers}
-            >
-                {/* Track */}
-                <View
-                    pointerEvents="none"
-                    style={[styles.sliderTrack, { backgroundColor: trackBg }]}
-                    onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-                >
-                    {/* Filled portion */}
-                    <Animated.View style={[styles.sliderFilled, { width: filledWidth }]} />
-
-                    {/* Tick marks */}
-                    {trackWidth > 0 &&
-                        grades.map((g, i) => {
-                            const tickX = xForIndex(i);
-                            return (
-                                <View
-                                    key={g}
-                                    style={[
-                                        styles.tick,
-                                        {
-                                            left: tickX - 1,
-                                            backgroundColor: i <= indexOfValue ? '#fff' : trackBg,
-                                        },
-                                    ]}
-                                />
-                            );
-                        })}
-
-                    {/* Thumb */}
-                    <Animated.View
+            {/* Outer wrapper - drag anywhere on track */}
+            <GestureDetector gesture={sliderGesture}>
+                <View style={styles.sliderOuter}>
+                    {/* Track */}
+                    <View
                         pointerEvents="none"
-                        style={[
-                            styles.sliderThumb,
-                            { transform: [{ translateX: thumbX }] },
-                        ]}
-                    />
+                        style={[styles.sliderTrack, { backgroundColor: trackBg }]}
+                        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+                    >
+                        {/* Filled portion */}
+                        <Reanimated.View style={[styles.sliderFilled, filledAnimatedStyle]} />
+
+                        {/* Tick marks */}
+                        {trackWidth > 0 &&
+                            grades.map((g, i) => {
+                                const tickX = xForIndex(i);
+                                return (
+                                    <View
+                                        key={g}
+                                        style={[
+                                            styles.tick,
+                                            {
+                                                left: tickX - 1,
+                                                backgroundColor: i <= indexOfValue ? '#fff' : trackBg,
+                                            },
+                                        ]}
+                                    />
+                                );
+                            })}
+
+                        {/* Thumb */}
+                        <Reanimated.View
+                            pointerEvents="none"
+                            style={[
+                                styles.sliderThumb,
+                                thumbAnimatedStyle,
+                            ]}
+                        />
+                    </View>
                 </View>
-            </View>
+            </GestureDetector>
 
             {/* Min / max labels */}
             <View style={styles.sliderEndLabels}>
@@ -239,10 +247,13 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
     const [wall, setWall] = useState('');
     const [instagramUrl, setInstagramUrl] = useState('');
 
-    const translateY = useRef(new Animated.Value(800)).current;
-    const backdropOpacity = useRef(new Animated.Value(0)).current;
+    const translateY = useSharedValue(800);
+    const backdropOpacity = useSharedValue(0);
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
+    const handleDismissComplete = useCallback(() => {
+        onCloseRef.current();
+    }, []);
 
     const gym = getGymById(gymId);
     const allGrades = gym ? getGradesForGym(gym) : null;
@@ -265,61 +276,48 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
             setColor('');
             setWall('');
             setInstagramUrl('');
-            translateY.setValue(800);
-            backdropOpacity.setValue(0);
-            Animated.parallel([
-                Animated.spring(translateY, {
-                    toValue: 0,
-                    overshootClamping: true,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(backdropOpacity, {
-                    toValue: 1,
-                    duration: 100,
-                    useNativeDriver: true,
-                }),
-            ]).start();
+            translateY.value = 800;
+            backdropOpacity.value = 0;
+            translateY.value = withSpring(0, { overshootClamping: true });
+            backdropOpacity.value = withTiming(1, { duration: 100 });
         }
     }, [visible, sliderGrades, translateY, backdropOpacity]);
 
     const dismissModal = useCallback(() => {
-        Animated.parallel([
-            Animated.spring(translateY, {
-                toValue: 800,
-                overshootClamping: true,
-                useNativeDriver: true,
-            }),
-            Animated.timing(backdropOpacity, {
-                toValue: 0,
-                duration: 250,
-                useNativeDriver: true,
-            }),
-        ]).start(() => {
-            onCloseRef.current();
+        translateY.value = withSpring(800, { overshootClamping: true });
+        backdropOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
+            if (finished) {
+                runOnJS(handleDismissComplete)();
+            }
         });
-    }, [translateY, backdropOpacity]);
+    }, [translateY, backdropOpacity, handleDismissComplete]);
 
-    const panResponder = useMemo(
+    const dragGesture = useMemo(
         () =>
-            PanResponder.create({
-                onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
-                onPanResponderMove: (_, gs) => {
-                    if (gs.dy > 0) translateY.setValue(gs.dy);
-                },
-                onPanResponderRelease: (_, gs) => {
-                    if (gs.dy > 100 || gs.vy > 0.5) {
-                        dismissModal();
-                    } else {
-                        Animated.spring(translateY, {
-                            toValue: 0,
-                            useNativeDriver: true,
-                        }).start();
+            Gesture.Pan()
+                .activeOffsetY(5)
+                .onUpdate((event) => {
+                    if (event.translationY > 0) {
+                        translateY.value = event.translationY;
                     }
-                },
-            }),
+                })
+                .onEnd((event) => {
+                    if (event.translationY > 100 || event.velocityY > 500) {
+                        runOnJS(dismissModal)();
+                    } else {
+                        translateY.value = withSpring(0, { overshootClamping: true });
+                    }
+                }),
         [translateY, dismissModal],
     );
+
+    const backdropAnimatedStyle = useAnimatedStyle(() => ({
+        opacity: backdropOpacity.value,
+    }));
+
+    const sheetAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: translateY.value }],
+    }));
 
     const handleSubmit = useCallback(() => {
         if (!effectiveGrade) return;
@@ -338,87 +336,90 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
 
     return (
         <Modal visible={visible} animationType="none" transparent onRequestClose={dismissModal}>
-            <KeyboardAvoidingView
-                style={styles.overlay}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-                <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-                    <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
-                </Animated.View>
-
-                <Animated.View
-                    style={[styles.sheet, { backgroundColor: modalBg, transform: [{ translateY }] }]}
+            <GestureHandlerRootView style={styles.overlay}>
+                <KeyboardAvoidingView
+                    style={styles.overlay}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
-                    <View {...panResponder.panHandlers}>
-                        <View style={styles.handle} />
-                    </View>
+                    <Reanimated.View style={[styles.backdrop, backdropAnimatedStyle]}>
+                        <Pressable style={StyleSheet.absoluteFill} onPress={dismissModal} />
+                    </Reanimated.View>
 
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <Pressable onPress={dismissModal} style={styles.headerBtn}>
-                            <ThemedText style={styles.headerBtnText}>Cancel</ThemedText>
-                        </Pressable>
-                        <ThemedText type="subtitle" style={styles.headerTitle}>
-                            Log Climb
-                        </ThemedText>
-                        <Pressable
-                            onPress={handleSubmit}
-                            disabled={!canSubmit}
-                            style={[styles.headerBtn, { opacity: canSubmit ? 1 : 0.35 }]}
-                        >
-                            <ThemedText style={[styles.headerBtnText, { color: AppColors.primary }]}>
-                                Save
-                            </ThemedText>
-                        </Pressable>
-                    </View>
-
-                    <ScrollView
-                        style={styles.body}
-                        contentContainerStyle={styles.bodyContent}
-                        keyboardShouldPersistTaps="handled"
-                        showsVerticalScrollIndicator={false}
+                    <Reanimated.View
+                        style={[styles.sheet, { backgroundColor: modalBg }, sheetAnimatedStyle]}
                     >
-                        {/* Grade */}
-                        <View style={styles.fieldGroup}>
-                            <ThemedText style={styles.label}>Grade *</ThemedText>
+                        <GestureDetector gesture={dragGesture}>
+                            <View>
+                                <View style={styles.handle} />
+                            </View>
+                        </GestureDetector>
 
-                            {/* Wild toggle (Boulder Planet only) */}
-                            {hasWild && (
-                                <View style={[styles.wildRow, { borderColor }]}>
-                                    <View>
-                                        <ThemedText style={styles.wildLabel}>Wild</ThemedText>
-                                        <ThemedText style={styles.wildSub}>Ungraded / setter's choice</ThemedText>
-                                    </View>
-                                    <Switch
-                                        value={isWild}
-                                        onValueChange={setIsWild}
-                                        trackColor={{ false: '#e5e7eb', true: AppColors.primary }}
-                                    />
-                                </View>
-                            )}
-
-                            {/* Slider for numeric grades */}
-                            {sliderGrades && (
-                                <View style={{ opacity: isWild ? 0.35 : 1 }} pointerEvents={isWild ? 'none' : 'auto'}>
-                                    <GradeSlider
-                                        grades={sliderGrades}
-                                        value={grade || sliderGrades[0]}
-                                        onChange={setGrade}
-                                    />
-                                </View>
-                            )}
-
-                            {/* Free text for gyms with no grade system */}
-                            {!allGrades && (
-                                <TextInput
-                                    style={[styles.input, { backgroundColor: inputBg, color: textColor, borderColor }]}
-                                    value={grade}
-                                    onChangeText={setGrade}
-                                    placeholder="e.g. V4, 6a+"
-                                    placeholderTextColor={placeholderColor}
-                                />
-                            )}
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <Pressable onPress={dismissModal} style={styles.headerBtn}>
+                                <ThemedText style={styles.headerBtnText}>Cancel</ThemedText>
+                            </Pressable>
+                            <ThemedText type="subtitle" style={styles.headerTitle}>
+                                Log Climb
+                            </ThemedText>
+                            <Pressable
+                                onPress={handleSubmit}
+                                disabled={!canSubmit}
+                                style={[styles.headerBtn, { opacity: canSubmit ? 1 : 0.35 }]}
+                            >
+                                <ThemedText style={[styles.headerBtnText, { color: AppColors.primary }]}>
+                                    Save
+                                </ThemedText>
+                            </Pressable>
                         </View>
+
+                        <ScrollView
+                            style={styles.body}
+                            contentContainerStyle={styles.bodyContent}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
+                            {/* Grade */}
+                            <View style={styles.fieldGroup}>
+                                <ThemedText style={styles.label}>Grade *</ThemedText>
+
+                                {/* Wild toggle (Boulder Planet only) */}
+                                {hasWild && (
+                                    <View style={[styles.wildRow, { borderColor }]}>
+                                        <View>
+                                            <ThemedText style={styles.wildLabel}>Wild</ThemedText>
+                                            <ThemedText style={styles.wildSub}>Ungraded / setter&apos;s choice</ThemedText>
+                                        </View>
+                                        <Switch
+                                            value={isWild}
+                                            onValueChange={setIsWild}
+                                            trackColor={{ false: '#e5e7eb', true: AppColors.primary }}
+                                        />
+                                    </View>
+                                )}
+
+                                {/* Slider for numeric grades */}
+                                {sliderGrades && (
+                                    <View style={{ opacity: isWild ? 0.35 : 1 }} pointerEvents={isWild ? 'none' : 'auto'}>
+                                        <GradeSlider
+                                            grades={sliderGrades}
+                                            value={grade || sliderGrades[0]}
+                                            onChange={setGrade}
+                                        />
+                                    </View>
+                                )}
+
+                                {/* Free text for gyms with no grade system */}
+                                {!allGrades && (
+                                    <TextInput
+                                        style={[styles.input, { backgroundColor: inputBg, color: textColor, borderColor }]}
+                                        value={grade}
+                                        onChangeText={setGrade}
+                                        placeholder="e.g. V4, 6a+"
+                                        placeholderTextColor={placeholderColor}
+                                    />
+                                )}
+                            </View>
 
                         {/* Color */}
                         <View style={styles.fieldGroup}>
@@ -504,9 +505,10 @@ export function LogClimbModal({ visible, onClose, onSubmit, sessionId, gymId }: 
                                 keyboardType="url"
                             />
                         </View>
-                    </ScrollView>
-                </Animated.View>
-            </KeyboardAvoidingView>
+                        </ScrollView>
+                    </Reanimated.View>
+                </KeyboardAvoidingView>
+            </GestureHandlerRootView>
         </Modal>
     );
 }
@@ -689,3 +691,4 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
 });
+
