@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -7,6 +7,8 @@ import {
   Pressable,
   useColorScheme,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   format,
@@ -24,6 +26,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore, useSocialStore } from '@/stores';
 import { CURRENT_USER, getGymById } from '@/data';
 import { AppColors, Colors } from '@/constants/theme';
+import { Device } from '@/constants/device';
 import { ClimbingSession } from '@/types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -587,6 +590,45 @@ export default function ProfileScreen() {
   const surfaceBg = useThemeColor({ light: '#f3f4f6', dark: '#262626' }, 'background');
 
   const [profileTab, setProfileTab] = useState<ProfileTab>('insights');
+  const PROFILE_TABS: ProfileTab[] = ['insights', 'activities', 'progression'];
+  const profileTabIndex = useSharedValue(0);
+  const profileTabOffset = useSharedValue(0);
+  const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
+
+  const changeProfileTab = useCallback((index: number) => {
+    setProfileTab(PROFILE_TABS[index]);
+  }, []);
+
+  const profileTabSwipe = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-15, 15])
+      .failOffsetY([-10, 10])
+      .onUpdate((e) => {
+        profileTabOffset.value = -profileTabIndex.value * Device.SCREEN_WIDTH + e.translationX;
+      })
+      .onEnd((e) => {
+        let target = profileTabIndex.value;
+        if ((e.translationX < -400 || e.velocityX < -500) && target < PROFILE_TABS.length - 1) {
+          target++;
+        } else if ((e.translationX > 400 || e.velocityX > 500) && target > 0) {
+          target--;
+        }
+        profileTabIndex.value = target;
+        profileTabOffset.value = withTiming(-target * Device.SCREEN_WIDTH, SWIPE_TIMING);
+        runOnJS(changeProfileTab)(target);
+      }),
+  [changeProfileTab]);
+
+  const animatedProfileTabStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: profileTabOffset.value }],
+  }));
+
+  const handleProfileTabPress = useCallback((tab: ProfileTab) => {
+    const index = PROFILE_TABS.indexOf(tab);
+    profileTabIndex.value = index;
+    profileTabOffset.value = withTiming(-index * Device.SCREEN_WIDTH, SWIPE_TIMING);
+    setProfileTab(tab);
+  }, []);
 
   const mySessions = useMemo(
     () =>
@@ -684,7 +726,7 @@ export default function ProfileScreen() {
               <Pressable
                 key={t}
                 style={[styles.tabBtn, profileTab === t && styles.tabBtnActive]}
-                onPress={() => setProfileTab(t)}
+                onPress={() => handleProfileTabPress(t)}
               >
                 <Text
                   style={[
@@ -699,173 +741,171 @@ export default function ProfileScreen() {
           </View>
 
           {/* ── Tab Content ── */}
-          <View style={styles.tabContent}>
-            {profileTab === 'insights' && (
-              <>
-                <View style={[styles.chartCard, { backgroundColor: cardBg, borderColor }]}>
-                  <ThemedText style={styles.chartTitle}>Climbing Hours</ThemedText>
-                  <ThemedText style={styles.chartSubtitle}>Last 8 weeks</ThemedText>
-                  <BarChart data={weeklyHours} valueKey="hours" labelKey="label" color={AppColors.primary} unit="h" />
+          <GestureDetector gesture={profileTabSwipe}>
+          <View style={[styles.tabContent, {overflow: 'hidden', marginHorizontal: -20}]}>
+          <Reanimated.View style={[{flexDirection: 'row', width: Device.SCREEN_WIDTH * 3}, animatedProfileTabStyle]}>
+            <View style={{width: Device.SCREEN_WIDTH, paddingHorizontal: 20}}>
+              <View style={[styles.chartCard, { backgroundColor: cardBg, borderColor }]}>
+                <ThemedText style={styles.chartTitle}>Climbing Hours</ThemedText>
+                <ThemedText style={styles.chartSubtitle}>Last 8 weeks</ThemedText>
+                <BarChart data={weeklyHours} valueKey="hours" labelKey="label" color={AppColors.primary} unit="h" />
+              </View>
+
+              <View style={[styles.chartCard, { backgroundColor: cardBg, borderColor }]}>
+                <ThemedText style={styles.chartTitle}>Sends</ThemedText>
+                <ThemedText style={styles.chartSubtitle}>Last 6 months</ThemedText>
+                <BarChart data={monthlySends} valueKey="sends" labelKey="label" color="#22c55e" unit="" />
+              </View>
+
+              <View style={styles.insightStatsRow}>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <Text style={styles.insightStatEmoji}>🔥</Text>
+                  <ThemedText style={styles.insightStatVal}>{stats.currentStreak}</ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>Current Streak</ThemedText>
+                </View>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <Text style={styles.insightStatEmoji}>⚡</Text>
+                  <ThemedText style={styles.insightStatVal}>{stats.longestStreak}</ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>Longest Streak</ThemedText>
+                </View>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <Text style={styles.insightStatEmoji}>📅</Text>
+                  <ThemedText style={styles.insightStatVal}>{stats.sessionsThisWeek}</ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>This Week</ThemedText>
+                </View>
+              </View>
+            </View>
+
+            <View style={{width: Device.SCREEN_WIDTH, paddingHorizontal: 20}}>
+              <View style={styles.insightStatsRow}>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <ThemedText style={styles.insightStatVal}>{mySessions.length}</ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>Sessions</ThemedText>
+                </View>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <ThemedText style={styles.insightStatVal}>{totalHours}h</ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>Total Time</ThemedText>
+                </View>
+                <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
+                  <ThemedText style={styles.insightStatVal}>
+                    {mySessions.length > 0 ? `${Math.round(stats.totalMinutes / mySessions.length)}m` : '0m'}
+                  </ThemedText>
+                  <ThemedText style={styles.insightStatLabel}>Avg Session</ThemedText>
+                </View>
+              </View>
+
+              {mySessions.map((session) => (
+                <SessionCard key={session.id} session={session} />
+              ))}
+
+              {mySessions.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>📭</Text>
+                  <ThemedText style={styles.emptyText}>No sessions yet</ThemedText>
+                  <ThemedText style={styles.emptySubtext}>Your climbing sessions will appear here</ThemedText>
+                </View>
+              )}
+            </View>
+
+            <View style={{width: Device.SCREEN_WIDTH, paddingHorizontal: 20}}>
+              {/* Level Card */}
+              <View style={[styles.levelCard, { backgroundColor: cardBg, borderColor }]}>
+                <View style={styles.levelHeader}>
+                  <View>
+                    <ThemedText style={styles.levelTierLabel}>{levelInfo.tier}</ThemedText>
+                    <ThemedText style={styles.levelNumber}>Level {levelInfo.level}</ThemedText>
+                  </View>
+                  <View style={styles.xpBadge}>
+                    <Text style={styles.xpBadgeText}>{levelInfo.xp} XP</Text>
+                  </View>
                 </View>
 
-                <View style={[styles.chartCard, { backgroundColor: cardBg, borderColor }]}>
-                  <ThemedText style={styles.chartTitle}>Sends</ThemedText>
-                  <ThemedText style={styles.chartSubtitle}>Last 6 months</ThemedText>
-                  <BarChart data={monthlySends} valueKey="sends" labelKey="label" color="#22c55e" unit="" />
+                <View style={styles.xpBarContainer}>
+                  <View style={[styles.xpBarTrack, { backgroundColor: isDark ? '#333' : '#e5e7eb' }]}>
+                    <View
+                      style={[styles.xpBarFill, { width: `${Math.min(levelInfo.progress * 100, 100)}%`, backgroundColor: AppColors.primary }]}
+                    />
+                  </View>
+                  <ThemedText style={styles.xpBarLabel}>
+                    {levelInfo.xp} / {levelInfo.nextXp} XP to next level
+                  </ThemedText>
                 </View>
 
-                <View style={styles.insightStatsRow}>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <Text style={styles.insightStatEmoji}>🔥</Text>
-                    <ThemedText style={styles.insightStatVal}>{stats.currentStreak}</ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>Current Streak</ThemedText>
+                <View style={styles.xpBreakdown}>
+                  <View style={styles.xpRow}>
+                    <ThemedText style={styles.xpRowLabel}>⏱️ Climbing time</ThemedText>
+                    <ThemedText style={styles.xpRowVal}>{stats.totalMinutes} XP</ThemedText>
                   </View>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <Text style={styles.insightStatEmoji}>⚡</Text>
-                    <ThemedText style={styles.insightStatVal}>{stats.longestStreak}</ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>Longest Streak</ThemedText>
-                  </View>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <Text style={styles.insightStatEmoji}>📅</Text>
-                    <ThemedText style={styles.insightStatVal}>{stats.sessionsThisWeek}</ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>This Week</ThemedText>
+                  <View style={styles.xpRow}>
+                    <ThemedText style={styles.xpRowLabel}>🧗 Sessions bonus</ThemedText>
+                    <ThemedText style={styles.xpRowVal}>{stats.totalSessions * 50} XP</ThemedText>
                   </View>
                 </View>
-              </>
-            )}
+              </View>
 
-            {profileTab === 'activities' && (
-              <>
-                <View style={styles.insightStatsRow}>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <ThemedText style={styles.insightStatVal}>{mySessions.length}</ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>Sessions</ThemedText>
-                  </View>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <ThemedText style={styles.insightStatVal}>{totalHours}h</ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>Total Time</ThemedText>
-                  </View>
-                  <View style={[styles.insightStatCard, { backgroundColor: surfaceBg }]}>
-                    <ThemedText style={styles.insightStatVal}>
-                      {mySessions.length > 0 ? `${Math.round(stats.totalMinutes / mySessions.length)}m` : '0m'}
-                    </ThemedText>
-                    <ThemedText style={styles.insightStatLabel}>Avg Session</ThemedText>
-                  </View>
-                </View>
+              {/* Achievements */}
+              <ThemedText style={styles.achievementsTitle}>
+                Achievements ({unlockedCount}/{ALL_ACHIEVEMENTS.length})
+              </ThemedText>
 
-                {mySessions.map((session) => (
-                  <SessionCard key={session.id} session={session} />
-                ))}
-
-                {mySessions.length === 0 && (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyEmoji}>📭</Text>
-                    <ThemedText style={styles.emptyText}>No sessions yet</ThemedText>
-                    <ThemedText style={styles.emptySubtext}>Your climbing sessions will appear here</ThemedText>
-                  </View>
-                )}
-              </>
-            )}
-
-            {profileTab === 'progression' && (
-              <>
-                {/* Level Card */}
-                <View style={[styles.levelCard, { backgroundColor: cardBg, borderColor }]}>
-                  <View style={styles.levelHeader}>
-                    <View>
-                      <ThemedText style={styles.levelTierLabel}>{levelInfo.tier}</ThemedText>
-                      <ThemedText style={styles.levelNumber}>Level {levelInfo.level}</ThemedText>
+              {ACHIEVEMENT_CATEGORIES.map((category) => {
+                const categoryUnlocked = category.achievements.filter((ach) => ach.unlocked).length;
+                return (
+                  <View key={category.id} style={styles.achievementCategorySection}>
+                    <View style={styles.achievementCategoryHeader}>
+                      <ThemedText style={styles.achievementCategoryTitle}>{category.title}</ThemedText>
+                      <ThemedText style={styles.achievementCategoryCount}>
+                        {categoryUnlocked}/{category.achievements.length}
+                      </ThemedText>
                     </View>
-                    <View style={styles.xpBadge}>
-                      <Text style={styles.xpBadgeText}>{levelInfo.xp} XP</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.xpBarContainer}>
-                    <View style={[styles.xpBarTrack, { backgroundColor: isDark ? '#333' : '#e5e7eb' }]}>
+                    {category.achievements.map((ach) => (
                       <View
-                        style={[styles.xpBarFill, { width: `${Math.min(levelInfo.progress * 100, 100)}%`, backgroundColor: AppColors.primary }]}
-                      />
-                    </View>
-                    <ThemedText style={styles.xpBarLabel}>
-                      {levelInfo.xp} / {levelInfo.nextXp} XP to next level
-                    </ThemedText>
-                  </View>
-
-                  <View style={styles.xpBreakdown}>
-                    <View style={styles.xpRow}>
-                      <ThemedText style={styles.xpRowLabel}>⏱️ Climbing time</ThemedText>
-                      <ThemedText style={styles.xpRowVal}>{stats.totalMinutes} XP</ThemedText>
-                    </View>
-                    <View style={styles.xpRow}>
-                      <ThemedText style={styles.xpRowLabel}>🧗 Sessions bonus</ThemedText>
-                      <ThemedText style={styles.xpRowVal}>{stats.totalSessions * 50} XP</ThemedText>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Achievements */}
-                <ThemedText style={styles.achievementsTitle}>
-                  Achievements ({unlockedCount}/{ALL_ACHIEVEMENTS.length})
-                </ThemedText>
-
-                {ACHIEVEMENT_CATEGORIES.map((category) => {
-                  const categoryUnlocked = category.achievements.filter((ach) => ach.unlocked).length;
-                  return (
-                    <View key={category.id} style={styles.achievementCategorySection}>
-                      <View style={styles.achievementCategoryHeader}>
-                        <ThemedText style={styles.achievementCategoryTitle}>{category.title}</ThemedText>
-                        <ThemedText style={styles.achievementCategoryCount}>
-                          {categoryUnlocked}/{category.achievements.length}
-                        </ThemedText>
-                      </View>
-
-                      {category.achievements.map((ach) => (
+                        key={ach.id}
+                        style={[
+                          styles.achievementCard,
+                          { backgroundColor: cardBg, borderColor, opacity: ach.unlocked ? 1 : 0.45 },
+                        ]}
+                      >
                         <View
-                          key={ach.id}
                           style={[
-                            styles.achievementCard,
-                            { backgroundColor: cardBg, borderColor, opacity: ach.unlocked ? 1 : 0.45 },
+                            styles.achievementIcon,
+                            { backgroundColor: ach.unlocked ? '#7c3aed' : (isDark ? '#333' : '#d1d5db') },
                           ]}
                         >
-                          <View
-                            style={[
-                              styles.achievementIcon,
-                              { backgroundColor: ach.unlocked ? '#7c3aed' : (isDark ? '#333' : '#d1d5db') },
-                            ]}
-                          >
-                            <Text style={styles.achievementEmoji}>{ach.emoji}</Text>
-                          </View>
-                          <View style={styles.achievementInfo}>
-                            <View style={styles.achievementHeadingRow}>
-                              <ThemedText style={styles.achievementLabel}>{ach.label}</ThemedText>
-                              {typeof ach.xp === 'number' && (
-                                <View
-                                  style={[
-                                    styles.achievementXpChip,
-                                    { backgroundColor: ach.unlocked ? '#ede9fe' : (isDark ? '#333' : '#f3f4f6') },
-                                  ]}
-                                >
-                                  <Text style={styles.achievementXpText}>{ach.xp.toLocaleString()} XP</Text>
-                                </View>
-                              )}
-                            </View>
-                            <ThemedText style={styles.achievementStatus}>
-                              {ach.unlocked ? 'Unlocked' : 'Locked'}
-                            </ThemedText>
-                            <ThemedText style={styles.achievementDescription}>
-                              {category.hideDescription ? 'Hidden badge. Unlock condition is secret.' : ach.description}
-                            </ThemedText>
-                          </View>
-                          {ach.unlocked && <Text style={styles.achievementCheck}>✓</Text>}
+                          <Text style={styles.achievementEmoji}>{ach.emoji}</Text>
                         </View>
-                      ))}
-                    </View>
-                  );
-                })}
-              </>
-            )}
+                        <View style={styles.achievementInfo}>
+                          <View style={styles.achievementHeadingRow}>
+                            <ThemedText style={styles.achievementLabel}>{ach.label}</ThemedText>
+                            {typeof ach.xp === 'number' && (
+                              <View
+                                style={[
+                                  styles.achievementXpChip,
+                                  { backgroundColor: ach.unlocked ? '#ede9fe' : (isDark ? '#333' : '#f3f4f6') },
+                                ]}
+                              >
+                                <Text style={styles.achievementXpText}>{ach.xp.toLocaleString()} XP</Text>
+                              </View>
+                            )}
+                          </View>
+                          <ThemedText style={styles.achievementStatus}>
+                            {ach.unlocked ? 'Unlocked' : 'Locked'}
+                          </ThemedText>
+                          <ThemedText style={styles.achievementDescription}>
+                            {category.hideDescription ? 'Hidden badge. Unlock condition is secret.' : ach.description}
+                          </ThemedText>
+                        </View>
+                        {ach.unlocked && <Text style={styles.achievementCheck}>✓</Text>}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          </Reanimated.View>
           </View>
+          </GestureDetector>
         </View>
       </ScrollView>
     </ThemedView>

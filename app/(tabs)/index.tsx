@@ -1,9 +1,11 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, Animated, useColorScheme, Text, Alert, Switch } from 'react-native';
-import { GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { format } from 'date-fns';
 import { AppColors, Colors } from '@/constants/theme';
+import { Device } from '@/constants/device';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ActiveSessionCard } from '@/components/home/active-session-card';
@@ -609,6 +611,45 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
 
   const [homeTab, setHomeTab] = useState<HomeTab>('tracker');
+  const HOME_TABS: HomeTab[] = ['tracker', 'feed', 'ranks'];
+  const tabIndex = useSharedValue(0);
+  const tabOffset = useSharedValue(0);
+  const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
+
+  const changeHomeTab = useCallback((index: number) => {
+    setHomeTab(HOME_TABS[index]);
+  }, []);
+
+  const homeTabSwipe = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-15, 15])
+      .failOffsetY([-10, 10])
+      .onUpdate((e) => {
+        tabOffset.value = -tabIndex.value * Device.SCREEN_WIDTH + e.translationX;
+      })
+      .onEnd((e) => {
+        let target = tabIndex.value;
+        if ((e.translationX < -150 || e.velocityX < -500) && target < HOME_TABS.length - 1) {
+          target++;
+        } else if ((e.translationX > 150 || e.velocityX > 500) && target > 0) {
+          target--;
+        }
+        tabIndex.value = target;
+        tabOffset.value = withTiming(-target * Device.SCREEN_WIDTH, SWIPE_TIMING);
+        runOnJS(changeHomeTab)(target);
+      }),
+  [changeHomeTab]);
+
+  const animatedTabStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tabOffset.value }],
+  }));
+
+  const handleTabPress = useCallback((tab: HomeTab) => {
+    const index = HOME_TABS.indexOf(tab);
+    tabIndex.value = index;
+    tabOffset.value = withTiming(-index * Device.SCREEN_WIDTH, SWIPE_TIMING);
+    setHomeTab(tab);
+  }, []);
   const [rankCategory, setRankCategory] = useState<RankCategory>('friends');
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
@@ -832,7 +873,7 @@ export default function HomeScreen() {
               styles.topTabButton,
               homeTab === tab && styles.topTabButtonActive,
             ]}
-            onPress={() => setHomeTab(tab)}
+            onPress={() => handleTabPress(tab)}
           >
             <Text
               style={[
@@ -846,7 +887,10 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {homeTab === 'tracker' ? (
+      <GestureDetector gesture={homeTabSwipe}>
+      <View style={{flex: 1, overflow: 'hidden'}}>
+      <Reanimated.View style={[{flexDirection: 'row', width: Device.SCREEN_WIDTH * 3, height: '100%'}, animatedTabStyle]}>
+      <View style={{width: Device.SCREEN_WIDTH}}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Current Session */}
         <View style={styles.section}>
@@ -918,7 +962,9 @@ export default function HomeScreen() {
           )}
         </View>
         </ScrollView>
-      ) : homeTab === 'feed' ? (
+      </View>
+
+      <View style={{width: Device.SCREEN_WIDTH}}>
         <FlatList
           data={recentPosts}
           keyExtractor={(p) => p.id}
@@ -935,7 +981,9 @@ export default function HomeScreen() {
             </View>
           }
         />
-      ) : (
+      </View>
+
+      <View style={{width: Device.SCREEN_WIDTH}}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
           {/* Category Toggle */}
           <View style={styles.rankCategoryRow}>
@@ -1042,7 +1090,10 @@ export default function HomeScreen() {
                   ))}
           </View>
         </ScrollView>
-      )}
+      </View>
+      </Reanimated.View>
+      </View>
+      </GestureDetector>
 
       {/* Gym Picker Modal */}
       <GymPickerModal
