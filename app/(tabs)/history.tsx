@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, ScrollView, View, Pressable } from 'react-native';
-import { format, formatDistanceToNow, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { endOfWeek, format, formatDistanceToNow, isWithinInterval, startOfWeek } from 'date-fns';
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { getGymById } from '@/data';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore } from '@/stores';
-import { getGymById } from '@/data';
 import { ClimbingSession } from '@/types';
 
 type FilterPeriod = 'all' | 'week' | 'month';

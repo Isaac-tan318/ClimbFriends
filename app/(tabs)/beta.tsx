@@ -1,25 +1,25 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  useColorScheme,
-  ScrollView,
-} from 'react-native';
-import { formatDistanceToNow } from 'date-fns';
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { AppColors, Colors } from '@/constants/theme';
-import { useSessionStore } from '@/stores/session-store';
 import { SINGAPORE_GYMS, getGymById } from '@/data/gyms';
 import {
-  MOCK_BETA_POSTS,
-  getBetaPostsForGym,
-  getUniqueGradesForGym,
-  getUniqueWallsForGym,
-  BetaPost,
+    BetaPost,
+    MOCK_BETA_POSTS,
+    getBetaPostsForGym,
+    getUniqueGradesForGym,
+    getUniqueWallsForGym,
 } from '@/data/mock-beta';
+import { useSessionStore } from '@/stores/session-store';
+import { formatDistanceToNow } from 'date-fns';
+import React, { useMemo, useState } from 'react';
+import {
+    FlatList,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useColorScheme,
+} from 'react-native';
 
 export default function BetaScreen() {
   const colorScheme = useColorScheme() ?? 'light';

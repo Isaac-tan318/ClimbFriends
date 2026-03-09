@@ -1,4 +1,4 @@
-import { ClimbingSession, UserStats, LeaderboardEntry } from '@/types';
+import { ClimbingSession, LeaderboardEntry, UserStats } from '@/types';
 import { MOCK_USERS } from './mock-users';
 
 // Helper to create dates in the past

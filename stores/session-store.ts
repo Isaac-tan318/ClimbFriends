@@ -1,6 +1,6 @@
-import { create } from 'zustand';
+import { CURRENT_USER_STATS, MOCK_SESSIONS } from '@/data';
 import { ClimbingSession, LoggedClimb, UserStats } from '@/types';
-import { MOCK_SESSIONS, CURRENT_USER_STATS, getUserSessions } from '@/data';
+import { create } from 'zustand';
 
 interface SessionState {
   sessions: ClimbingSession[];
