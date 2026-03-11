@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    StyleSheet,
-    View,
-    Pressable,
-    Modal,
-    TextInput,
-    ScrollView,
     KeyboardAvoidingView,
+    Modal,
     Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
     Switch,
+    TextInput,
+    View,
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -20,9 +20,9 @@ import Reanimated, {
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import { AppColors } from '@/constants/theme';
-import { getGymById, getGradesForGym } from '@/data';
+import { getGradesForGym, getGymById } from '@/data';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { LoggedClimb } from '@/types';
 
 // Common hold / tape colors used across gyms

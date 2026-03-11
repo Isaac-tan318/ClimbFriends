@@ -1,25 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Platform,
-  Alert,
-  Keyboard,
-  useColorScheme,
-  ScrollView,
-} from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { Link, useRouter } from 'expo-router';
 import { AppColors, Colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores';
+import { Link, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useColorScheme,
+  View,
+} from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
 
