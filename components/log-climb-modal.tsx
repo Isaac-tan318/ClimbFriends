@@ -59,6 +59,18 @@ function GradeSlider({
     const startX = useSharedValue(0);
     const isDragging = useRef(false);
     const lastIdx = useSharedValue(0);
+    const trackWidthSV = useSharedValue(0);
+    const gradeCountSV = useSharedValue(grades.length);
+
+    useEffect(() => {
+        gradeCountSV.value = grades.length;
+    }, [grades.length, gradeCountSV]);
+
+    const handleTrackLayout = useCallback((e: any) => {
+        const w = e.nativeEvent.layout.width;
+        setTrackWidth(w);
+        trackWidthSV.value = w;
+    }, [trackWidthSV]);
 
     const indexOfValue = useMemo(() => {
         const i = grades.indexOf(value);
@@ -105,64 +117,71 @@ function GradeSlider({
                 .minDistance(0)
                 .onBegin((event) => {
                     runOnJS(setDragging)(true);
-                    const gradeCount = grades.length;
-                    if (trackWidth <= 0 || gradeCount === 0) return;
+                    const gradeCount = gradeCountSV.value;
+                    const tw = trackWidthSV.value;
+                    if (tw <= 0 || gradeCount === 0) return;
 
                     // Jump thumb to touch location immediately.
                     const touchX = event.x - THUMB_SIZE / 2; // offset for outer padding
-                    const clamped = Math.max(0, Math.min(trackWidth, touchX));
+                    const clamped = Math.max(0, Math.min(tw, touchX));
                     startX.value = clamped;
                     thumbX.value = clamped;
 
                     const idx = gradeCount <= 1
                         ? 0
-                        : Math.max(0, Math.min(gradeCount - 1, Math.round(clamped / (trackWidth / (gradeCount - 1)))));
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(clamped / (tw / (gradeCount - 1)))));
                     if (idx !== lastIdx.value) {
                         lastIdx.value = idx;
                         runOnJS(emitIndexChange)(idx);
                     }
                 })
                 .onUpdate((event) => {
-                    const gradeCount = grades.length;
-                    if (trackWidth <= 0 || gradeCount === 0) return;
+                    const gradeCount = gradeCountSV.value;
+                    const tw = trackWidthSV.value;
+                    if (tw <= 0 || gradeCount === 0) return;
 
-                    const rawX = Math.max(0, Math.min(trackWidth, startX.value + event.translationX));
+                    const rawX = Math.max(0, Math.min(tw, startX.value + event.translationX));
                     thumbX.value = rawX;
 
                     const idx = gradeCount <= 1
                         ? 0
-                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (trackWidth / (gradeCount - 1)))));
-                    if (idx !== lastIdx.value) {
-                        lastIdx.value = idx;
-                        runOnJS(emitIndexChange)(idx);
+                        : Math.max(0, Math.min(tw, rawX));
+                    const snappedIdx = gradeCount <= 1
+                        ? 0
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (tw / (gradeCount - 1)))));
+                    if (snappedIdx !== lastIdx.value) {
+                        lastIdx.value = snappedIdx;
+                        runOnJS(emitIndexChange)(snappedIdx);
                     }
                 })
                 .onEnd((event) => {
                     runOnJS(setDragging)(false);
-                    const gradeCount = grades.length;
-                    if (trackWidth <= 0 || gradeCount === 0) return;
+                    const gradeCount = gradeCountSV.value;
+                    const tw = trackWidthSV.value;
+                    if (tw <= 0 || gradeCount === 0) return;
 
-                    const rawX = Math.max(0, Math.min(trackWidth, startX.value + event.translationX));
+                    const rawX = Math.max(0, Math.min(tw, startX.value + event.translationX));
                     const idx = gradeCount <= 1
                         ? 0
-                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (trackWidth / (gradeCount - 1)))));
+                        : Math.max(0, Math.min(gradeCount - 1, Math.round(rawX / (tw / (gradeCount - 1)))));
                     if (idx !== lastIdx.value) {
                         lastIdx.value = idx;
                         runOnJS(emitIndexChange)(idx);
                     }
-                    thumbX.value = withSpring(xForIndex(idx, trackWidth), {
+                    const snapX = gradeCount <= 1 ? 0 : (idx / (gradeCount - 1)) * tw;
+                    thumbX.value = withSpring(snapX, {
                         overshootClamping: true,
                     });
                 })
                 .onFinalize(() => {
                     runOnJS(setDragging)(false);
                 }),
-        [trackWidth, grades.length, thumbX, startX, lastIdx, emitIndexChange, setDragging, xForIndex],
+        [trackWidthSV, gradeCountSV, thumbX, startX, lastIdx, emitIndexChange, setDragging],
     );
 
     const filledAnimatedStyle = useAnimatedStyle(() => ({
-        width: Math.max(0, Math.min(trackWidth, thumbX.value)),
-    }), [trackWidth]);
+        width: Math.max(0, Math.min(trackWidthSV.value, thumbX.value)),
+    }));
 
     const thumbAnimatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: thumbX.value }],
@@ -182,7 +201,7 @@ function GradeSlider({
                     <View
                         pointerEvents="none"
                         style={[styles.sliderTrack, { backgroundColor: trackBg }]}
-                        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+                        onLayout={handleTrackLayout}
                     >
                         {/* Filled portion */}
                         <Reanimated.View style={[styles.sliderFilled, filledAnimatedStyle]} />

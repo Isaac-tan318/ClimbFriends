@@ -48,3 +48,35 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Supabase Migration Notes
+
+This repo now includes a Supabase-first backend scaffold:
+
+- Supabase client: `lib/supabase.ts`
+- Feature flags: `constants/feature-flags.ts`
+- SQL schema + RLS: `supabase/migrations/202603110001_initial_schema.sql`
+- Base seed data: `supabase/seed.sql`
+- Edge function stubs: `supabase/functions/*`
+- One-off mock import: `scripts/supabase/import-mock-data.mjs`
+
+### Environment setup
+
+1. Copy `.env.example` to `.env`.
+2. Set:
+   - `EXPO_PUBLIC_SUPABASE_URL`
+   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+3. For scripts/functions also set:
+   - `SUPABASE_SECRET_KEY`
+
+### Feature flags
+
+Use these environment flags during hybrid rollout:
+
+- `EXPO_PUBLIC_FEATURE_AUTH`
+- `EXPO_PUBLIC_FEATURE_SESSIONS`
+- `EXPO_PUBLIC_FEATURE_FEED`
+- `EXPO_PUBLIC_FEATURE_SOCIAL`
+- `EXPO_PUBLIC_FEATURE_MESSAGES`
+- `EXPO_PUBLIC_FEATURE_NOTIFICATIONS`
+- `EXPO_PUBLIC_FEATURE_PRESENCE`

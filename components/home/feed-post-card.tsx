@@ -5,7 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 import { AppColors } from '@/constants/theme';
 import { getGymById } from '@/data';
-import { BetaPost } from '@/data/mock-beta';
+import type { BetaPost } from '@/types';
 
 type FeedPostCardProps = {
   item: BetaPost;

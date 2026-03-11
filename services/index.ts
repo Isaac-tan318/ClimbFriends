@@ -1,0 +1,12 @@
+export { authService } from '@/services/auth/auth-service';
+export { getCurrentUserId } from '@/services/auth/current-user';
+export { feedService } from '@/services/feed/feed-service';
+export { leaderboardService } from '@/services/leaderboard/leaderboard-service';
+export { messageService } from '@/services/messages/message-service';
+export { notificationService } from '@/services/notifications/notification-service';
+export { presenceService } from '@/services/presence/presence-service';
+export { realtimeService } from '@/services/realtime/realtime-service';
+export { sessionService } from '@/services/sessions/session-service';
+export { settingsService } from '@/services/settings/settings-service';
+export { socialService } from '@/services/social/social-service';
+export type { AppResult, AppError } from '@/services/api/result';

@@ -1,110 +1,256 @@
-import { CURRENT_USER_STATS, MOCK_SESSIONS } from '@/data';
-import { ClimbingSession, LoggedClimb, UserStats } from '@/types';
 import { create } from 'zustand';
+
+import { CURRENT_USER_STATS, MOCK_SESSIONS } from '@/data/mock-sessions';
+import type { ClimbingSession, LoggedClimb, UserStats } from '@/types';
+import { getCurrentUserId } from '@/services/auth/current-user';
+import { err, ok, type AppResult } from '@/services/api/result';
+import { sessionService } from '@/services/sessions/session-service';
+
+type SyncState = {
+  loading: boolean;
+  initialized: boolean;
+  source: 'mock' | 'supabase';
+  error: string | null;
+};
 
 interface SessionState {
   sessions: ClimbingSession[];
   stats: UserStats;
   activeSession: ClimbingSession | null;
-  
-  // Actions
-  startSession: (gymId: string) => void;
-  endSession: () => void;
-  addSession: (session: ClimbingSession) => void;
-  logClimb: (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => void;
+  sync: SyncState;
+
+  initialize: () => Promise<AppResult<void>>;
+  startSession: (gymId: string) => Promise<AppResult<ClimbingSession>>;
+  endSession: () => Promise<AppResult<ClimbingSession | null>>;
+  addSession: (session: ClimbingSession) => Promise<AppResult<ClimbingSession>>;
+  logClimb: (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => Promise<AppResult<LoggedClimb>>;
+  refreshSessions: () => Promise<AppResult<ClimbingSession[]>>;
   getUserSessions: (userId: string) => ClimbingSession[];
   getRecentSessions: (limit?: number) => ClimbingSession[];
 }
+
+const DEFAULT_USER_ID = 'user-1';
+
+const resolveUserId = async () => (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+
+const deriveStats = (sessions: ClimbingSession[], userId: string): UserStats => {
+  const mine = sessions.filter((session) => session.userId === userId && !session.isActive);
+  const totalMinutes = mine.reduce((sum, session) => sum + session.durationMinutes, 0);
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const sessionsThisWeek = mine.filter((session) => session.startedAt >= sevenDaysAgo);
+  const minutesThisWeek = sessionsThisWeek.reduce((sum, session) => sum + session.durationMinutes, 0);
+
+  const gymCounts = mine.reduce<Record<string, number>>((acc, session) => {
+    acc[session.gymId] = (acc[session.gymId] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const favoriteGymId = Object.entries(gymCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
+
+  return {
+    totalMinutes,
+    totalSessions: mine.length,
+    sessionsThisWeek: sessionsThisWeek.length,
+    minutesThisWeek,
+    favoriteGymId,
+    currentStreak: CURRENT_USER_STATS.currentStreak,
+    longestStreak: CURRENT_USER_STATS.longestStreak,
+  };
+};
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: MOCK_SESSIONS,
   stats: CURRENT_USER_STATS,
   activeSession: null,
-  
-  startSession: (gymId) => {
-    const newSession: ClimbingSession = {
-      id: `session-${Date.now()}`,
-      userId: 'user-1',
-      gymId,
-      startedAt: new Date(),
-      endedAt: null,
-      durationMinutes: 0,
-      isActive: true,
-    };
-    
-    set({ activeSession: newSession });
-  },
-  
-  endSession: () => {
-    const { activeSession, sessions, stats } = get();
-    if (!activeSession) return;
-    
-    const endedAt = new Date();
-    const durationMinutes = Math.round(
-      (endedAt.getTime() - activeSession.startedAt.getTime()) / 60000
-    );
-    
-    const completedSession: ClimbingSession = {
-      ...activeSession,
-      endedAt,
-      durationMinutes,
-      isActive: false,
-    };
-    
-    set({
-      activeSession: null,
-      sessions: [completedSession, ...sessions],
-      stats: {
-        ...stats,
-        totalMinutes: stats.totalMinutes + durationMinutes,
-        totalSessions: stats.totalSessions + 1,
-        minutesThisWeek: stats.minutesThisWeek + durationMinutes,
-        sessionsThisWeek: stats.sessionsThisWeek + 1,
-      },
-    });
-  },
-  
-  addSession: (session) => {
-    set((state) => ({
-      sessions: [session, ...state.sessions],
-    }));
+  sync: {
+    loading: false,
+    initialized: false,
+    source: 'mock',
+    error: null,
   },
 
-  logClimb: (climbData) => {
-    const { activeSession, sessions } = get();
-    const climb: LoggedClimb = {
-      ...climbData,
-      id: `climb-${Date.now()}`,
-      loggedAt: new Date(),
-    };
+  initialize: async () => {
+    set((state) => ({ sync: { ...state.sync, loading: true, initialized: true, error: null } }));
 
-    // Add to active session if it matches
-    if (activeSession && activeSession.id === climbData.sessionId) {
-      set({
-        activeSession: {
-          ...activeSession,
-          climbs: [...(activeSession.climbs ?? []), climb],
+    const userId = await resolveUserId();
+    const sessionsResult = await sessionService.getSessions(userId);
+
+    if (!sessionsResult.ok) {
+      set((state) => ({
+        sync: {
+          ...state.sync,
+          loading: false,
+          error: sessionsResult.error.message,
         },
-      });
+      }));
+      return err(sessionsResult.error.message, sessionsResult.error.code, sessionsResult.error.details);
     }
 
-    // Also update in sessions list (for ended sessions with summary)
+    const sessions = sessionsResult.data;
+    const activeSession = sessions.find((session) => session.isActive) ?? null;
+
+    const statsResult = await sessionService.getStats(userId);
+    const stats = statsResult.ok ? statsResult.data : deriveStats(sessions, userId);
+
+    set({
+      sessions,
+      activeSession,
+      stats,
+      sync: {
+        loading: false,
+        initialized: true,
+        source: userId === DEFAULT_USER_ID ? 'mock' : 'supabase',
+        error: statsResult.ok ? null : statsResult.error.message,
+      },
+    });
+
+    return ok(undefined);
+  },
+
+  refreshSessions: async () => {
+    const userId = await resolveUserId();
+    const result = await sessionService.getSessions(userId);
+
+    if (!result.ok) {
+      set((state) => ({
+        sync: {
+          ...state.sync,
+          error: result.error.message,
+        },
+      }));
+      return err(result.error.message, result.error.code, result.error.details);
+    }
+
+    const sessions = result.data;
+    set({
+      sessions,
+      activeSession: sessions.find((session) => session.isActive) ?? null,
+      stats: deriveStats(sessions, userId),
+      sync: {
+        loading: false,
+        initialized: true,
+        source: userId === DEFAULT_USER_ID ? 'mock' : 'supabase',
+        error: null,
+      },
+    });
+
+    return ok(sessions);
+  },
+
+  startSession: async (gymId) => {
+    const userId = await resolveUserId();
+    set((state) => ({ sync: { ...state.sync, loading: true, error: null } }));
+
+    const result = await sessionService.startSession(userId, gymId);
+
+    if (!result.ok) {
+      set((state) => ({ sync: { ...state.sync, loading: false, error: result.error.message } }));
+      return err(result.error.message, result.error.code, result.error.details);
+    }
+
     set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === climbData.sessionId
-          ? { ...s, climbs: [...(s.climbs ?? []), climb] }
-          : s,
-      ),
+      activeSession: result.data,
+      sync: {
+        ...state.sync,
+        loading: false,
+        source: userId === DEFAULT_USER_ID ? 'mock' : 'supabase',
+      },
     }));
+
+    return ok(result.data);
   },
-  
+
+  endSession: async () => {
+    const { activeSession, sessions } = get();
+    if (!activeSession) return ok(null);
+
+    const userId = await resolveUserId();
+    set((state) => ({ sync: { ...state.sync, loading: true, error: null } }));
+
+    const result = await sessionService.endSession(activeSession.id);
+
+    if (!result.ok) {
+      set((state) => ({ sync: { ...state.sync, loading: false, error: result.error.message } }));
+      return err(result.error.message, result.error.code, result.error.details);
+    }
+
+    const nextSessions = [result.data, ...sessions.filter((session) => session.id !== result.data.id)];
+
+    set((state) => ({
+      activeSession: null,
+      sessions: nextSessions,
+      stats: deriveStats(nextSessions, userId),
+      sync: {
+        ...state.sync,
+        loading: false,
+        source: userId === DEFAULT_USER_ID ? 'mock' : 'supabase',
+      },
+    }));
+
+    return ok(result.data);
+  },
+
+  addSession: async (session) => {
+    set((state) => {
+      const nextSessions = [session, ...state.sessions];
+      return {
+        sessions: nextSessions,
+        stats: deriveStats(nextSessions, session.userId),
+      };
+    });
+
+    return ok(session);
+  },
+
+  logClimb: async (climbData) => {
+    const userId = await resolveUserId();
+    set((state) => ({ sync: { ...state.sync, loading: true, error: null } }));
+
+    const result = await sessionService.logClimb({
+      ...climbData,
+      userId,
+    });
+
+    if (!result.ok) {
+      set((state) => ({ sync: { ...state.sync, loading: false, error: result.error.message } }));
+      return err(result.error.message, result.error.code, result.error.details);
+    }
+
+    const climb = result.data;
+
+    set((state) => ({
+      activeSession:
+        state.activeSession && state.activeSession.id === climb.sessionId
+          ? {
+              ...state.activeSession,
+              climbs: [...(state.activeSession.climbs ?? []), climb],
+            }
+          : state.activeSession,
+      sessions: state.sessions.map((session) =>
+        session.id === climb.sessionId
+          ? { ...session, climbs: [...(session.climbs ?? []), climb] }
+          : session,
+      ),
+      sync: {
+        ...state.sync,
+        loading: false,
+        source: userId === DEFAULT_USER_ID ? 'mock' : 'supabase',
+      },
+    }));
+
+    return ok(climb);
+  },
+
   getUserSessions: (userId) => {
-    return get().sessions.filter((s) => s.userId === userId);
+    return get().sessions.filter((session) => session.userId === userId);
   },
-  
+
   getRecentSessions: (limit = 10) => {
-    return get()
-      .sessions.filter((s) => s.userId === 'user-1')
+    const userSessions = get().sessions.filter((session) => session.userId === DEFAULT_USER_ID);
+    return userSessions
       .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
       .slice(0, limit);
   },

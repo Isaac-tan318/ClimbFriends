@@ -2,13 +2,13 @@ import { AppHeaderBanner } from '@/components/app-header-banner';
 import { AppColors, Colors } from '@/constants/theme';
 import { SINGAPORE_GYMS, getGymById } from '@/data/gyms';
 import {
-    BetaPost,
     MOCK_BETA_POSTS,
     getBetaPostsForGym,
     getUniqueGradesForGym,
     getUniqueWallsForGym,
 } from '@/data/mock-beta';
 import { useSessionStore } from '@/stores/session-store';
+import type { BetaPost } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import React, { useMemo, useState } from 'react';
 import {

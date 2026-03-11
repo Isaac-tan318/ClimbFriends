@@ -1,4 +1,4 @@
-import { LoggedClimb, ClimbingSession } from '@/types';
+import type { BetaPost } from '@/types';
 
 // Helper to create dates in the past
 const daysAgo = (days: number, hours = 0, minutes = 0): Date => {
@@ -7,26 +7,6 @@ const daysAgo = (days: number, hours = 0, minutes = 0): Date => {
   date.setHours(hours, minutes, 0, 0);
   return date;
 };
-
-// ─── Beta feed types ────────────────────────────────────────────────────────
-
-export interface BetaPost {
-  id: string;
-  type: 'session' | 'send';
-  userId: string;
-  userName: string;
-  gymId: string;
-  postedAt: Date;
-  // Session fields (when type === 'session')
-  sessionDurationMinutes?: number;
-   climbCount?: number;
-  climbedWithNames?: string[];
-  // Send fields (when type === 'send')
-  grade?: string;
-  color?: string;
-  wall?: string;
-  instagramUrl?: string;
-}
 
 // ─── Mock beta posts ────────────────────────────────────────────────────────
 

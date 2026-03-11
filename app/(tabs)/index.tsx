@@ -18,14 +18,12 @@ import { BottomSheetDismiss, BottomSheetModal } from '@/components/shared/bottom
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useSessionStore, useSocialStore } from '@/stores';
+import { useAuthStore, useSessionStore, useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, MOCK_NATIONAL_LEADERBOARD, MOCK_GYM_LEADERBOARD, CURRENT_USER } from '@/data';
-import type { GymLeaderboardEntry } from '@/data/mock-sessions';
-import { ClimbingSession, Friend, LoggedClimb } from '@/types';
-import {
-  getAllRecentBetaPosts,
-  BetaPost,
-} from '@/data/mock-beta';
+import { getAllRecentBetaPosts } from '@/data/mock-beta';
+import type { BetaPost, ClimbingSession, Friend, GymLeaderboardEntry, LoggedClimb } from '@/types';
+import { feedService } from '@/services/feed/feed-service';
+import { leaderboardService } from '@/services/leaderboard/leaderboard-service';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -463,6 +461,8 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
 
 type HomeTab = 'tracker' | 'feed' | 'ranks';
 type RankCategory = 'friends' | 'gyms' | 'national';
+const HOME_TABS: HomeTab[] = ['tracker', 'feed', 'ranks'];
+const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
 
 /* Gym Podium (top 3 gyms) */
 function AnimatedGymPodium({ entries }: { entries: GymLeaderboardEntry[] }) {
@@ -597,6 +597,7 @@ function RankStatHighlight({ label, value }: { label: string; value: string }) {
 }
 
 export default function HomeScreen() {
+  const authUser = useAuthStore((state) => state.user);
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
   const startSession = useSessionStore((state) => state.startSession);
@@ -611,14 +612,12 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
 
   const [homeTab, setHomeTab] = useState<HomeTab>('tracker');
-  const HOME_TABS: HomeTab[] = ['tracker', 'feed', 'ranks'];
   const tabIndex = useSharedValue(0);
   const tabOffset = useSharedValue(0);
-  const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
 
   const changeHomeTab = useCallback((index: number) => {
     setHomeTab(HOME_TABS[index]);
-  }, []);
+  }, [setHomeTab]);
 
   const homeTabSwipe = useMemo(() =>
     Gesture.Pan()
@@ -638,7 +637,7 @@ export default function HomeScreen() {
         tabOffset.value = withTiming(-target * Device.SCREEN_WIDTH, SWIPE_TIMING);
         runOnJS(changeHomeTab)(target);
       }),
-  [changeHomeTab]);
+  [changeHomeTab, tabIndex, tabOffset]);
 
   const animatedTabStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabOffset.value }],
@@ -649,7 +648,7 @@ export default function HomeScreen() {
     tabIndex.value = index;
     tabOffset.value = withTiming(-index * Device.SCREEN_WIDTH, SWIPE_TIMING);
     setHomeTab(tab);
-  }, []);
+  }, [tabIndex, tabOffset]);
   const [rankCategory, setRankCategory] = useState<RankCategory>('friends');
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
@@ -666,6 +665,9 @@ export default function HomeScreen() {
   const [publishDescription, setPublishDescription] = useState('');
   const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
   const [hasPublished, setHasPublished] = useState(false);
+  const [friendsLeaderboard, setFriendsLeaderboard] = useState(MOCK_LEADERBOARD);
+  const [nationalLeaderboard, setNationalLeaderboard] = useState(MOCK_NATIONAL_LEADERBOARD);
+  const [gymLeaderboard, setGymLeaderboard] = useState(MOCK_GYM_LEADERBOARD);
 
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
 
@@ -791,12 +793,34 @@ export default function HomeScreen() {
   }, [lastEndedSession]);
 
   const handlePublishSubmit = useCallback((dismiss: BottomSheetDismiss) => {
-    // In a real app, this would post to the backend / feed
-    setHasPublished(true);
-    dismiss(() => {
-      Alert.alert('Published!', 'Your session has been shared to the feed.');
-    });
-  }, []);
+    const publish = async () => {
+      if (lastEndedSession) {
+        const publishResult = await feedService.publishSession({
+          userId: authUser?.id ?? CURRENT_USER.id,
+          sessionId: lastEndedSession.id,
+          gymId: lastEndedSession.gymId,
+          sessionDurationMinutes: lastEndedSession.durationMinutes,
+          climbCount: lastEndedSession.climbs?.length ?? 0,
+          description: publishDescription,
+          climbedWithUserIds: publishClimbedWith ? friends.slice(0, 3).map((friend) => friend.id) : [],
+        });
+
+        if (!publishResult.ok) {
+          Alert.alert('Publish failed', publishResult.error.message);
+          return;
+        }
+
+        setAllFeedPosts((prev) => [publishResult.data, ...prev]);
+      }
+
+      setHasPublished(true);
+      dismiss(() => {
+        Alert.alert('Published!', 'Your session has been shared to the feed.');
+      });
+    };
+
+    void publish();
+  }, [lastEndedSession, authUser?.id, publishDescription, publishClimbedWith, friends]);
 
   const handleFriendPickerClose = useCallback(() => {
     setFriendPickerVisible(false);
@@ -809,13 +833,34 @@ export default function HomeScreen() {
     ? `Come climb with me at ${inviteGymName} right now!`
     : `Come climb with me at ${inviteGymName}`;
 
-  const recentPosts = useMemo(() => getAllRecentBetaPosts(60).filter((p) => p.type === 'session'), []);
+  const [allFeedPosts, setAllFeedPosts] = useState<BetaPost[]>(() => getAllRecentBetaPosts(100));
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadFeed = async () => {
+      const result = await feedService.getFeedPosts({ limit: 100 });
+      if (mounted && result.ok) {
+        setAllFeedPosts(result.data);
+      }
+    };
+
+    void loadFeed();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const recentPosts = useMemo(
+    () => allFeedPosts.filter((post) => post.type === 'session').slice(0, 60),
+    [allFeedPosts],
+  );
 
   // Build a lookup of sends grouped by userId + gymId
   const sendsLookup = useMemo(() => {
-    const allPosts = getAllRecentBetaPosts(100);
     const map = new Map<string, BetaPost[]>();
-    for (const p of allPosts) {
+    for (const p of allFeedPosts) {
       if (p.type !== 'send') continue;
       const key = `${p.userId}__${p.gymId}`;
       const arr = map.get(key) ?? [];
@@ -823,7 +868,37 @@ export default function HomeScreen() {
       map.set(key, arr);
     }
     return map;
-  }, []);
+  }, [allFeedPosts]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLeaderboards = async () => {
+      const [friendsResult, nationalResult, gymsResult] = await Promise.all([
+        leaderboardService.getFriendsLeaderboard(authUser?.id ?? CURRENT_USER.id),
+        leaderboardService.getNationalLeaderboard(100, 0),
+        leaderboardService.getGymLeaderboard(20),
+      ]);
+
+      if (!mounted) return;
+
+      if (friendsResult.ok && friendsResult.data.length > 0) {
+        setFriendsLeaderboard(friendsResult.data);
+      }
+      if (nationalResult.ok && nationalResult.data.length > 0) {
+        setNationalLeaderboard(nationalResult.data);
+      }
+      if (gymsResult.ok && gymsResult.data.length > 0) {
+        setGymLeaderboard(gymsResult.data);
+      }
+    };
+
+    void loadLeaderboards();
+
+    return () => {
+      mounted = false;
+    };
+  }, [authUser?.id]);
 
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
@@ -1010,17 +1085,18 @@ export default function HomeScreen() {
 
           {/* Podium */}
           {rankCategory === 'gyms' ? (
-            <AnimatedGymPodium entries={MOCK_GYM_LEADERBOARD} />
+            <AnimatedGymPodium entries={gymLeaderboard} />
           ) : (
             <AnimatedPodium
-              entries={rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD}
+              entries={rankCategory === 'friends' ? friendsLeaderboard : nationalLeaderboard}
               currentUserId={CURRENT_USER.id}
             />
           )}
 
           {/* Community Stats */}
           {rankCategory !== 'gyms' && (() => {
-            const data = rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD;
+            const data = rankCategory === 'friends' ? friendsLeaderboard : nationalLeaderboard;
+            if (data.length === 0) return null;
             return (
               <View style={styles.lbStatsRow}>
                 <RankStatHighlight
@@ -1043,22 +1119,22 @@ export default function HomeScreen() {
             <View style={styles.lbStatsRow}>
               <RankStatHighlight
                 label="Top Gym"
-                value={MOCK_GYM_LEADERBOARD[0].gymName.replace(/^(Boulder\+|Climb Central|BFF Climb|Boulder Planet|Fitbloc|Lighthouse)\s*/i, '')}
+                value={(gymLeaderboard[0]?.gymName ?? 'N/A').replace(/^(Boulder\+|Climb Central|BFF Climb|Boulder Planet|Fitbloc|Lighthouse)\s*/i, '')}
               />
               <RankStatHighlight
                 label="Total Hours"
-                value={`${Math.round(MOCK_GYM_LEADERBOARD.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
+                value={`${Math.round(gymLeaderboard.reduce((sum, e) => sum + e.totalMinutes, 0) / 60)}h`}
               />
               <RankStatHighlight
                 label="Climbers"
-                value={String(MOCK_GYM_LEADERBOARD.reduce((sum, e) => sum + e.activeMembersCount, 0))}
+                value={String(gymLeaderboard.reduce((sum, e) => sum + e.activeMembersCount, 0))}
               />
             </View>
           )}
 
           {/* Your Position (people categories only) */}
           {rankCategory !== 'gyms' && (() => {
-            const data = rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD;
+            const data = rankCategory === 'friends' ? friendsLeaderboard : nationalLeaderboard;
             const currentUserEntry = data.find((e) => e.userId === CURRENT_USER.id);
             return currentUserEntry && currentUserEntry.rank > 3 ? (
               <View style={styles.lbYourPositionSection}>
@@ -1076,10 +1152,10 @@ export default function HomeScreen() {
               Rankings
             </ThemedText>
             {rankCategory === 'gyms'
-              ? MOCK_GYM_LEADERBOARD.slice(3).map((entry) => (
+              ? gymLeaderboard.slice(3).map((entry) => (
                   <GymLeaderboardCard key={entry.gymId} entry={entry} />
                 ))
-              : (rankCategory === 'friends' ? MOCK_LEADERBOARD : MOCK_NATIONAL_LEADERBOARD)
+              : (rankCategory === 'friends' ? friendsLeaderboard : nationalLeaderboard)
                   .slice(3)
                   .map((entry) => (
                     <RankLeaderboardCard

@@ -56,6 +56,15 @@ export interface Friendship {
   addresseeId: string;
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface FriendRequest {
+  id: string;
+  requesterId: string;
+  addresseeId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: Date;
 }
 
 export interface Friend extends User {
@@ -64,11 +73,22 @@ export interface Friend extends User {
   isAtGym: boolean;
 }
 
+export interface UserPresence {
+  userId: string;
+  currentGymId: string | null;
+  isAtGym: boolean;
+  lastSeenAt: Date | null;
+  latitude?: number;
+  longitude?: number;
+  updatedAt: Date;
+}
+
 export interface PlannedVisit {
   id: string;
   userId: string;
   gymId: string;
   plannedDate: Date;
+  message?: string;
   createdAt: Date;
   invitees: VisitInvite[];
 }
@@ -78,6 +98,8 @@ export interface VisitInvite {
   plannedVisitId: string;
   inviteeId: string;
   status: 'pending' | 'accepted' | 'declined';
+  createdAt?: Date;
+  respondedAt?: Date | null;
 }
 
 export interface LeaderboardEntry {
@@ -86,6 +108,54 @@ export interface LeaderboardEntry {
   totalMinutes: number;
   totalSessions: number;
   rank: number;
+}
+
+export interface GymLeaderboardEntry {
+  gymId: string;
+  gymName: string;
+  brand: string;
+  totalMinutes: number;
+  totalSessions: number;
+  activeMembersCount: number;
+  rank: number;
+}
+
+export interface BetaPost {
+  id: string;
+  type: 'session' | 'send';
+  userId: string;
+  userName: string;
+  gymId: string;
+  postedAt: Date;
+  sessionId?: string;
+  sessionDurationMinutes?: number;
+  climbCount?: number;
+  climbedWithNames?: string[];
+  grade?: string;
+  color?: string;
+  wall?: string;
+  instagramUrl?: string;
+  description?: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body?: string;
+  data?: Record<string, unknown>;
+  readAt: Date | null;
+  createdAt: Date;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  readAt: Date | null;
+  createdAt: Date;
 }
 
 export interface UserStats {

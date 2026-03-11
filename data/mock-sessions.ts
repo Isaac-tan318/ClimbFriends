@@ -1,4 +1,4 @@
-import { ClimbingSession, LeaderboardEntry, UserStats } from '@/types';
+import { ClimbingSession, GymLeaderboardEntry, LeaderboardEntry, UserStats } from '@/types';
 import { MOCK_USERS } from './mock-users';
 
 // Helper to create dates in the past
@@ -307,16 +307,6 @@ export const MOCK_NATIONAL_LEADERBOARD: LeaderboardEntry[] = [
     rank: 15,
   },
 ];
-
-export interface GymLeaderboardEntry {
-  gymId: string;
-  gymName: string;
-  brand: string;
-  totalMinutes: number;
-  totalSessions: number;
-  activeMembersCount: number;
-  rank: number;
-}
 
 export const MOCK_GYM_LEADERBOARD: GymLeaderboardEntry[] = [
   { gymId: 'climb-central-kallang', gymName: 'Climb Central Kallang', brand: 'Climb Central', totalMinutes: 8400, totalSessions: 112, activeMembersCount: 48, rank: 1 },
