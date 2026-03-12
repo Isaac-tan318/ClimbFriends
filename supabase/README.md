@@ -14,7 +14,8 @@ For scripts/functions also set:
 Apply SQL in order:
 
 1. `supabase/migrations/202603110001_initial_schema.sql`
-2. `supabase/seed.sql`
+2. `supabase/migrations/202603120001_gym_user_leaderboard.sql`
+3. `supabase/seed.sql`
 
 ## 3) Edge Functions
 Function stubs are in:

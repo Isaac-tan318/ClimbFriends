@@ -480,7 +480,7 @@ Achievement definitions. Currently hard-coded in `settings.tsx` across 5 categor
 |--------|-------|-------------|-------------|----------|
 | `GET` | `/api/leaderboards/friends` | Friends leaderboard | `?limit=` | `{ entries[], currentUserRank }` |
 | `GET` | `/api/leaderboards/national` | National leaderboard | `?limit=&offset=` | `{ entries[], currentUserRank, total }` |
-| `GET` | `/api/leaderboards/gyms` | Gym leaderboard | `?limit=` | `{ entries[] }` |
+| `GET` | `/api/leaderboards/gyms` | Top users within a gym | `?gymId=&limit=` | `{ entries[] }` |
 
 ---
 

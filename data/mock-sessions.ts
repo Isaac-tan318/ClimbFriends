@@ -1,4 +1,4 @@
-import { ClimbingSession, GymLeaderboardEntry, LeaderboardEntry, UserStats } from '@/types';
+import { ClimbingSession, LeaderboardEntry, UserStats } from '@/types';
 import { MOCK_USERS } from './mock-users';
 
 // Helper to create dates in the past
@@ -308,13 +308,39 @@ export const MOCK_NATIONAL_LEADERBOARD: LeaderboardEntry[] = [
   },
 ];
 
-export const MOCK_GYM_LEADERBOARD: GymLeaderboardEntry[] = [
-  { gymId: 'climb-central-kallang', gymName: 'Climb Central Kallang', brand: 'Climb Central', totalMinutes: 8400, totalSessions: 112, activeMembersCount: 48, rank: 1 },
-  { gymId: 'boulder-plus-aperia', gymName: 'Boulder+ Aperia', brand: 'Boulder+', totalMinutes: 7200, totalSessions: 98, activeMembersCount: 42, rank: 2 },
-  { gymId: 'bff-climb-bendemeer', gymName: 'BFF Climb Bendemeer', brand: 'BFF Climb', totalMinutes: 6100, totalSessions: 84, activeMembersCount: 36, rank: 3 },
-  { gymId: 'boulder-planet-taiseng', gymName: 'Boulder Planet Tai Seng', brand: 'Boulder Planet', totalMinutes: 5500, totalSessions: 72, activeMembersCount: 31, rank: 4 },
-  { gymId: 'fitbloc-depot', gymName: 'Fitbloc The Depot', brand: 'Fitbloc', totalMinutes: 4800, totalSessions: 65, activeMembersCount: 28, rank: 5 },
-  { gymId: 'lighthouse-climbing', gymName: 'Lighthouse Climbing', brand: 'Lighthouse', totalMinutes: 4200, totalSessions: 58, activeMembersCount: 25, rank: 6 },
-  { gymId: 'climb-central-funan', gymName: 'Climb Central Funan', brand: 'Climb Central', totalMinutes: 3800, totalSessions: 50, activeMembersCount: 22, rank: 7 },
-  { gymId: 'boulder-plus-chevrons', gymName: 'Boulder+ The Chevrons', brand: 'Boulder+', totalMinutes: 3400, totalSessions: 44, activeMembersCount: 19, rank: 8 },
-];
+export const getMockGymUserLeaderboard = (gymId: string, limit = 20): LeaderboardEntry[] => {
+  const byUserId = new Map<string, { totalMinutes: number; totalSessions: number }>();
+
+  for (const session of MOCK_SESSIONS) {
+    if (session.isActive || session.gymId !== gymId) continue;
+
+    const current = byUserId.get(session.userId) ?? { totalMinutes: 0, totalSessions: 0 };
+    current.totalMinutes += session.durationMinutes;
+    current.totalSessions += 1;
+    byUserId.set(session.userId, current);
+  }
+
+  return [...byUserId.entries()]
+    .sort(([, a], [, b]) => {
+      if (b.totalMinutes !== a.totalMinutes) return b.totalMinutes - a.totalMinutes;
+      return b.totalSessions - a.totalSessions;
+    })
+    .slice(0, limit)
+    .map(([userId, aggregate], index) => {
+      const mockUser = MOCK_USERS.find((user) => user.id === userId);
+      const fallbackName = userId.startsWith('user-') ? `Climber ${userId.split('-')[1]}` : 'Climber';
+
+      return {
+        userId,
+        user: mockUser ?? {
+          id: userId,
+          email: `${userId}@example.com`,
+          displayName: fallbackName,
+          createdAt: new Date('2024-01-01'),
+        },
+        totalMinutes: aggregate.totalMinutes,
+        totalSessions: aggregate.totalSessions,
+        rank: index + 1,
+      };
+    });
+};

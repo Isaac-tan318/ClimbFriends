@@ -4,12 +4,12 @@ import {
   MOCK_USERS,
 } from '@/data/mock-users';
 import {
-  MOCK_GYM_LEADERBOARD,
   MOCK_LEADERBOARD,
   MOCK_NATIONAL_LEADERBOARD,
+  getMockGymUserLeaderboard,
 } from '@/data/mock-sessions';
 import { getSupabaseClient, hasSupabaseConfig } from '@/lib/supabase';
-import type { GymLeaderboardEntry, LeaderboardEntry, User } from '@/types';
+import type { LeaderboardEntry, User } from '@/types';
 
 import { fromIsoOrNow } from '@/services/api/date';
 import { err, ok, type AppResult } from '@/services/api/result';
@@ -23,16 +23,6 @@ type DbLeaderboardRow = {
   email: string | null;
   avatar_url: string | null;
   created_at: string | null;
-};
-
-type DbGymLeaderboardRow = {
-  gym_id: string;
-  gym_name: string;
-  brand: string;
-  total_minutes: number;
-  total_sessions: number;
-  active_members_count: number;
-  rank: number;
 };
 
 const userById = new Map<string, User>(MOCK_USERS.map((user) => [user.id, user]));
@@ -89,32 +79,22 @@ export const leaderboardService = {
     return ok((data as DbLeaderboardRow[]).map(mapEntry));
   },
 
-  async getGymLeaderboard(limit = 20): Promise<AppResult<GymLeaderboardEntry[]>> {
+  async getGymUsersLeaderboard(gymId: string, limit = 20): Promise<AppResult<LeaderboardEntry[]>> {
+    if (!gymId) {
+      return ok([]);
+    }
+
     if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSessions) {
-      return ok(MOCK_GYM_LEADERBOARD);
+      return ok(getMockGymUserLeaderboard(gymId, limit));
     }
 
     const client = getSupabaseClient();
-    const { data, error } = await client
-      .from('gym_leaderboard')
-      .select('gym_id,gym_name,brand,total_minutes,total_sessions,active_members_count,rank')
-      .limit(limit)
-      .order('rank', { ascending: true });
+    const { data, error } = await client.rpc('gym_user_leaderboard', { target_gym_id: gymId });
 
     if (error || !data) {
-      return err(error?.message ?? 'Unable to load gym leaderboard', error?.code, error);
+      return err(error?.message ?? 'Unable to load gym users leaderboard', error?.code, error);
     }
 
-    return ok(
-      (data as DbGymLeaderboardRow[]).map((row) => ({
-        gymId: row.gym_id,
-        gymName: row.gym_name,
-        brand: row.brand,
-        totalMinutes: row.total_minutes,
-        totalSessions: row.total_sessions,
-        activeMembersCount: row.active_members_count,
-        rank: row.rank,
-      })),
-    );
+    return ok((data as DbLeaderboardRow[]).slice(0, limit).map(mapEntry));
   },
 };

@@ -110,16 +110,6 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
-export interface GymLeaderboardEntry {
-  gymId: string;
-  gymName: string;
-  brand: string;
-  totalMinutes: number;
-  totalSessions: number;
-  activeMembersCount: number;
-  rank: number;
-}
-
 export interface BetaPost {
   id: string;
   type: 'session' | 'send';

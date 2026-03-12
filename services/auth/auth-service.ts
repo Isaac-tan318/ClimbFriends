@@ -124,15 +124,12 @@ export const authService = {
       return err(error?.message ?? 'Unable to sign up', error?.code, error);
     }
 
-    const profileResult = await upsertProfile({
+    return ok({
       id: data.user.id,
-      email: data.user.email,
+      email: data.user.email || params.email,
       displayName: params.displayName,
-      avatarUrl: null,
+      createdAt: new Date()
     });
-
-    if (!profileResult.ok) return profileResult;
-    return ok(profileResult.data);
   },
 
   async signIn(params: { email: string; password: string }): Promise<AppResult<User>> {
