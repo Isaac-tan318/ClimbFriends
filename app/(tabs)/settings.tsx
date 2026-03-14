@@ -1,12 +1,12 @@
-import React from 'react';
-import { StyleSheet, ScrollView, View, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useAuthStore } from '@/stores';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAuthStore } from '@/stores';
 
 export default function SettingsScreen() {
   const router = useRouter();

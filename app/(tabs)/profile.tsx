@@ -1,33 +1,33 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import {
-  StyleSheet,
-  ScrollView,
-  View,
-  Text,
-  Pressable,
-  useColorScheme,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useRouter } from 'expo-router';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
+  endOfWeek,
   format,
   formatDistanceToNow,
-  startOfWeek,
-  endOfWeek,
   isWithinInterval,
+  startOfWeek,
   subDays,
   subMonths,
 } from 'date-fns';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Device } from '@/constants/device';
+import { AppColors, Colors } from '@/constants/theme';
+import { CURRENT_USER, getGymById } from '@/data';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useSessionStore, useSocialStore } from '@/stores';
-import { CURRENT_USER, getGymById } from '@/data';
-import { AppColors, Colors } from '@/constants/theme';
-import { Device } from '@/constants/device';
 import { ClimbingSession } from '@/types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
