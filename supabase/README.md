@@ -15,10 +15,12 @@ Apply SQL in order:
 
 1. `supabase/migrations/202603110001_initial_schema.sql`
 2. `supabase/migrations/202603120001_gym_user_leaderboard.sql`
-3. `supabase/seed.sql`
+3. `supabase/migrations/202603140001_backend_core_completion.sql`
+4. `supabase/migrations/202603150001_rankings_gym_index.sql`
+5. `supabase/seed.sql`
 
 ## 3) Edge Functions
-Function stubs are in:
+Edge functions are in:
 
 - `supabase/functions/publish-session/index.js`
 - `supabase/functions/invite-friends/index.js`

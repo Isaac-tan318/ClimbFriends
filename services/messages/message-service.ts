@@ -23,6 +23,8 @@ const mapMessage = (row: DbMessage): Message => ({
   createdAt: fromIsoOrNow(row.created_at),
 });
 
+const isSupabaseMessagesEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseMessages;
+
 export const messageService = {
   async getConversation(input: {
     userId: string;
@@ -30,8 +32,12 @@ export const messageService = {
     limit?: number;
     before?: Date;
   }): Promise<AppResult<Message[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseMessages) {
+    if (!isSupabaseMessagesEnabled) {
       return ok([]);
+    }
+
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -62,7 +68,7 @@ export const messageService = {
     receiverId: string;
     content: string;
   }): Promise<AppResult<Message>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseMessages) {
+    if (!isSupabaseMessagesEnabled) {
       return ok({
         id: `message-${Date.now()}`,
         senderId: input.senderId,
@@ -71,6 +77,10 @@ export const messageService = {
         readAt: null,
         createdAt: new Date(),
       });
+    }
+
+    if (!input.senderId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -95,8 +105,12 @@ export const messageService = {
     readerId: string;
     otherUserId: string;
   }): Promise<AppResult<void>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseMessages) {
+    if (!isSupabaseMessagesEnabled) {
       return ok(undefined);
+    }
+
+    if (!input.readerId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();

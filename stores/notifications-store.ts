@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
+import { hasSupabaseConfig } from '@/lib/supabase';
 import type { Notification } from '@/types';
 import { getCurrentUserId } from '@/services/auth/current-user';
 import { notificationService } from '@/services/notifications/notification-service';
@@ -15,9 +17,17 @@ type NotificationState = {
   refresh: () => Promise<AppResult<Notification[]>>;
   markRead: (notificationId: string) => Promise<AppResult<void>>;
   markAllRead: () => Promise<AppResult<void>>;
+  resetForSignedOut: () => void;
 };
 
 const DEFAULT_USER_ID = 'user-1';
+const useMockNotifications = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseNotifications;
+
+const resolveUserId = async (): Promise<string | null> => {
+  const userId = await getCurrentUserId();
+  if (userId) return userId;
+  return useMockNotifications ? DEFAULT_USER_ID : null;
+};
 
 const loadNotifications = async (userId: string) => notificationService.getNotifications(userId);
 
@@ -30,7 +40,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   initialize: async () => {
     set({ loading: true, error: null });
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      set({ notifications: [], unreadCount: 0, loading: false, initialized: true, error: null });
+      return ok([]);
+    }
+
     const result = await loadNotifications(userId);
 
     if (!result.ok) {
@@ -44,7 +59,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   refresh: async () => {
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      set({ notifications: [], unreadCount: 0, initialized: true, error: null });
+      return ok([]);
+    }
+
     const result = await loadNotifications(userId);
 
     if (!result.ok) {
@@ -82,7 +102,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   markAllRead: async () => {
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const result = await notificationService.markAllRead(userId);
 
     if (!result.ok) {
@@ -100,5 +124,15 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }));
 
     return ok(undefined);
+  },
+
+  resetForSignedOut: () => {
+    set({
+      notifications: [],
+      unreadCount: 0,
+      loading: false,
+      initialized: true,
+      error: null,
+    });
   },
 }));

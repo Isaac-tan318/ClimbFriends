@@ -65,6 +65,8 @@ export interface FriendRequest {
   addresseeId: string;
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: Date;
+  requester?: User;
+  addressee?: User;
 }
 
 export interface Friend extends User {

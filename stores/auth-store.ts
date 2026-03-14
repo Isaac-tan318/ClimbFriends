@@ -3,6 +3,11 @@ import { create } from 'zustand';
 import type { User } from '@/types';
 import { authService } from '@/services/auth/auth-service';
 import { err, ok, type AppResult } from '@/services/api/result';
+import { presenceService } from '@/services/presence/presence-service';
+import { useNotificationStore } from '@/stores/notifications-store';
+import { useSessionStore } from '@/stores/session-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useSocialStore } from '@/stores/social-store';
 
 type AuthState = {
   user: User | null;
@@ -11,7 +16,17 @@ type AuthState = {
   error: string | null;
   initialize: () => Promise<AppResult<User | null>>;
   signIn: (email: string, password: string) => Promise<AppResult<User>>;
-  signUp: (email: string, password: string, displayName: string) => Promise<AppResult<User>>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+  ) => Promise<
+    AppResult<{
+      user: User;
+      sessionStarted: boolean;
+      requiresEmailConfirmation: boolean;
+    }>
+  >;
   signOut: () => Promise<AppResult<void>>;
   updateProfile: (partial: { displayName?: string; avatarUrl?: string | null }) => Promise<AppResult<User>>;
 };
@@ -45,6 +60,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     set({ user: result.data, loading: false, initialized: true, error: null });
+    await Promise.all([
+      useSessionStore.getState().initialize(),
+      useSettingsStore.getState().initialize(),
+      useSocialStore.getState().initialize(),
+      useNotificationStore.getState().initialize(),
+    ]);
     return ok(result.data);
   },
 
@@ -57,11 +78,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return err(result.error.message, result.error.code, result.error.details);
     }
 
-    set({ user: result.data, loading: false, initialized: true, error: null });
+    if (!result.data.sessionStarted) {
+      set({ user: null, loading: false, initialized: true, error: null });
+      return ok(result.data);
+    }
+
+    set({ user: result.data.user, loading: false, initialized: true, error: null });
+    await Promise.all([
+      useSessionStore.getState().initialize(),
+      useSettingsStore.getState().initialize(),
+      useSocialStore.getState().initialize(),
+      useNotificationStore.getState().initialize(),
+    ]);
     return ok(result.data);
   },
 
   signOut: async () => {
+    const currentUser = get().user;
     set({ loading: true, error: null });
     const result = await authService.signOut();
 
@@ -69,6 +102,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false, error: result.error.message });
       return err(result.error.message, result.error.code, result.error.details);
     }
+
+    if (currentUser?.id) {
+      void presenceService.clearCheckIn(currentUser.id);
+    }
+
+    useSessionStore.getState().resetForSignedOut();
+    useSettingsStore.getState().resetForSignedOut();
+    useSocialStore.getState().resetForSignedOut();
+    useNotificationStore.getState().resetForSignedOut();
 
     set({ user: null, loading: false, initialized: true, error: null });
     return ok(undefined);

@@ -25,6 +25,8 @@ const mapPresence = (row: DbPresence): UserPresence => ({
   updatedAt: fromIsoOrNow(row.updated_at),
 });
 
+const isSupabasePresenceEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabasePresence;
+
 export const presenceService = {
   async updatePresence(input: {
     userId: string;
@@ -33,7 +35,7 @@ export const presenceService = {
     latitude?: number | null;
     longitude?: number | null;
   }): Promise<AppResult<UserPresence>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabasePresence) {
+    if (!isSupabasePresenceEnabled) {
       return ok({
         userId: input.userId,
         currentGymId: input.currentGymId ?? null,
@@ -43,6 +45,10 @@ export const presenceService = {
         longitude: input.longitude ?? undefined,
         updatedAt: new Date(),
       });
+    }
+
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -64,6 +70,45 @@ export const presenceService = {
     }
 
     return ok(mapPresence(data as DbPresence));
+  },
+
+  async updateFromCoordinates(input: {
+    userId: string;
+    latitude: number;
+    longitude: number;
+  }): Promise<AppResult<UserPresence>> {
+    if (!isSupabasePresenceEnabled) {
+      return this.updatePresence({
+        userId: input.userId,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        currentGymId: null,
+        isAtGym: false,
+      });
+    }
+
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
+    const client = getSupabaseClient();
+    const { data: resolvedGymId, error: resolveError } = await client.rpc('resolve_current_gym', {
+      latitude_input: input.latitude,
+      longitude_input: input.longitude,
+    });
+
+    if (resolveError) {
+      return err(resolveError.message, resolveError.code, resolveError);
+    }
+
+    const currentGymId = typeof resolvedGymId === 'string' ? resolvedGymId : null;
+    return this.updatePresence({
+      userId: input.userId,
+      currentGymId,
+      isAtGym: Boolean(currentGymId),
+      latitude: input.latitude,
+      longitude: input.longitude,
+    });
   },
 
   async clearCheckIn(userId: string): Promise<AppResult<UserPresence>> {

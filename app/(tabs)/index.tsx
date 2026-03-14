@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, useColorScheme, Text, Alert, Switch } from 'react-native';
+import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, useColorScheme, Text, Alert, Switch, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
 import { AppColors, Colors } from '@/constants/theme';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { Device } from '@/constants/device';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
@@ -17,13 +19,14 @@ import { LogClimbModal } from '@/components/log-climb-modal';
 import { BottomSheetDismiss, BottomSheetModal } from '@/components/shared/bottom-sheet-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useRankings, type RankingCategory } from '@/hooks/use-rankings';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore, useSessionStore, useSocialStore } from '@/stores';
-import { getGymById, SINGAPORE_GYMS, MOCK_LEADERBOARD, MOCK_NATIONAL_LEADERBOARD, CURRENT_USER } from '@/data';
+import { getGymById, SINGAPORE_GYMS, CURRENT_USER } from '@/data';
 import { getAllRecentBetaPosts } from '@/data/mock-beta';
-import type { BetaPost, ClimbingSession, Friend, LeaderboardEntry, LoggedClimb } from '@/types';
+import type { BetaPost, ClimbingSession, Friend, LoggedClimb } from '@/types';
+import { hasSupabaseConfig } from '@/lib/supabase';
 import { feedService } from '@/services/feed/feed-service';
-import { leaderboardService } from '@/services/leaderboard/leaderboard-service';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -460,7 +463,6 @@ function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onM
 }
 
 type HomeTab = 'tracker' | 'feed' | 'ranks';
-type RankCategory = 'friends' | 'gyms' | 'national';
 const HOME_TABS: HomeTab[] = ['tracker', 'feed', 'ranks'];
 const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
 
@@ -476,19 +478,24 @@ function RankStatHighlight({ label, value }: { label: string; value: string }) {
 }
 
 export default function HomeScreen() {
+  const searchParams = useLocalSearchParams<{ homeTab?: string }>();
   const authUser = useAuthStore((state) => state.user);
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
+  const sessionSyncLoading = useSessionStore((state) => state.sync.loading);
   const startSession = useSessionStore((state) => state.startSession);
   const endSession = useSessionStore((state) => state.endSession);
   const logClimb = useSessionStore((state) => state.logClimb);
   const allSessions = useSessionStore((state) => state.sessions);
   const plannedVisits = useSocialStore((state) => state.plannedVisits);
   const friends = useSocialStore((state) => state.friends);
+  const useMockAuthUser = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth;
+  const viewerUserId = authUser?.id ?? (useMockAuthUser ? CURRENT_USER.id : null);
 
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const colors = Colors[colorScheme];
+  const requestedHomeTabRef = useRef(false);
 
   const [homeTab, setHomeTab] = useState<HomeTab>('tracker');
   const tabIndex = useSharedValue(0);
@@ -528,8 +535,18 @@ export default function HomeScreen() {
     tabOffset.value = withTiming(-index * Device.SCREEN_WIDTH, SWIPE_TIMING);
     setHomeTab(tab);
   }, [tabIndex, tabOffset]);
-  const [rankCategory, setRankCategory] = useState<RankCategory>('friends');
-  const [rankGymId, setRankGymId] = useState<string>(() => activeSession?.gymId ?? SINGAPORE_GYMS[0]?.id ?? '');
+  const {
+    category: rankCategory,
+    setCategory: setRankCategory,
+    selectedGymId: rankGymId,
+    setSelectedGymId: setRankGymId,
+    friendsEntries: friendsLeaderboard,
+    gymEntries: gymUsersLeaderboard,
+    nationalEntries: nationalLeaderboard,
+    loadingByCategory,
+    errorByCategory,
+    refreshCategory,
+  } = useRankings(activeSession?.gymId ?? SINGAPORE_GYMS[0]?.id ?? '');
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
   const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
@@ -545,9 +562,6 @@ export default function HomeScreen() {
   const [publishDescription, setPublishDescription] = useState('');
   const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
   const [hasPublished, setHasPublished] = useState(false);
-  const [friendsLeaderboard, setFriendsLeaderboard] = useState(MOCK_LEADERBOARD);
-  const [nationalLeaderboard, setNationalLeaderboard] = useState(MOCK_NATIONAL_LEADERBOARD);
-  const [gymUsersLeaderboard, setGymUsersLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
 
@@ -555,10 +569,14 @@ export default function HomeScreen() {
   const rankGym = rankGymId ? getGymById(rankGymId) : null;
 
   useEffect(() => {
-    if (!rankGymId && SINGAPORE_GYMS[0]?.id) {
-      setRankGymId(activeSession?.gymId ?? SINGAPORE_GYMS[0].id);
-    }
-  }, [activeSession?.gymId, rankGymId]);
+    if (requestedHomeTabRef.current) return;
+
+    const requestedTab = searchParams.homeTab;
+    if (requestedTab !== 'tracker' && requestedTab !== 'feed' && requestedTab !== 'ranks') return;
+
+    requestedHomeTabRef.current = true;
+    handleTabPress(requestedTab);
+  }, [handleTabPress, searchParams.homeTab]);
 
   const upcomingPlans = useMemo(() => {
     const now = new Date();
@@ -673,7 +691,7 @@ export default function HomeScreen() {
     if (lastEndedSession) {
       const gym = getGymById(lastEndedSession.gymId);
       const duration = formatDurationMinutes(lastEndedSession.durationMinutes);
-      setPublishDescription(`Climbed for ${duration} at ${gym?.name ?? 'the gym'}!`);
+      setPublishDescription(`I Climbed for ${duration} at ${gym?.name ?? 'the gym'}!`);
       setPublishClimbedWith(false);
       setPublishModalVisible(true);
     }
@@ -757,52 +775,6 @@ export default function HomeScreen() {
     return map;
   }, [allFeedPosts]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadLeaderboards = async () => {
-      const [friendsResult, nationalResult] = await Promise.all([
-        leaderboardService.getFriendsLeaderboard(authUser?.id ?? CURRENT_USER.id),
-        leaderboardService.getNationalLeaderboard(100, 0),
-      ]);
-
-      if (!mounted) return;
-
-      if (friendsResult.ok) {
-        setFriendsLeaderboard(friendsResult.data);
-      }
-      if (nationalResult.ok) {
-        setNationalLeaderboard(nationalResult.data);
-      }
-    };
-
-    void loadLeaderboards();
-
-    return () => {
-      mounted = false;
-    };
-  }, [authUser?.id]);
-
-  useEffect(() => {
-    if (!rankGymId) return;
-
-    let mounted = true;
-
-    const loadGymUsersLeaderboard = async () => {
-      const gymUsersResult = await leaderboardService.getGymUsersLeaderboard(rankGymId, 100);
-      if (!mounted) return;
-      if (gymUsersResult.ok) {
-        setGymUsersLeaderboard(gymUsersResult.data);
-      }
-    };
-
-    void loadGymUsersLeaderboard();
-
-    return () => {
-      mounted = false;
-    };
-  }, [rankGymId]);
-
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
   const togglePostExpanded = useCallback((postId: string) => {
@@ -832,6 +804,7 @@ export default function HomeScreen() {
           surfaceBg={surfaceBg}
           onToggleExpanded={togglePostExpanded}
           getColorHex={getColorHex}
+          description={item.description}
         />
       );
     },
@@ -840,12 +813,16 @@ export default function HomeScreen() {
 
   const rankEntries = rankCategory === 'friends'
     ? friendsLeaderboard
-    : rankCategory === 'gyms'
+    : rankCategory === 'gym'
       ? gymUsersLeaderboard
       : nationalLeaderboard;
+  const currentRankLoading = loadingByCategory[rankCategory];
+  const currentRankError = errorByCategory[rankCategory];
   const showPodium = rankEntries.length >= 3;
   const rankingListEntries = rankEntries.slice(showPodium ? 3 : 0);
-  const currentUserRankEntry = rankEntries.find((entry) => entry.userId === CURRENT_USER.id);
+  const currentUserRankEntry = viewerUserId
+    ? rankEntries.find((entry) => entry.userId === viewerUserId)
+    : undefined;
 
   return (
     <ThemedView style={styles.container}>
@@ -911,13 +888,21 @@ export default function HomeScreen() {
                     {hasPublished ? '✓ Published' : 'Publish'}
                   </ThemedText>
                 </Pressable>
-                <Pressable style={styles.newSessionButton} onPress={handleStartSession}>
-                  <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
+                <Pressable
+                  style={[styles.newSessionButton, sessionSyncLoading && styles.newSessionButtonLoading]}
+                  onPress={handleStartSession}
+                  disabled={sessionSyncLoading}
+                >
+                  {sessionSyncLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
+                  )}
                 </Pressable>
               </View>
             </>
           ) : (
-            <IdleSessionCard onStart={handleStartSession} />
+            <IdleSessionCard onStart={handleStartSession} loading={sessionSyncLoading} />
           )}
         </View>
 
@@ -974,7 +959,7 @@ export default function HomeScreen() {
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
           {/* Category Toggle */}
           <View style={styles.rankCategoryRow}>
-            {(['friends', 'gyms', 'national'] as RankCategory[]).map((cat) => (
+            {(['friends', 'gym', 'national'] as RankingCategory[]).map((cat) => (
               <Pressable
                 key={cat}
                 style={[
@@ -989,16 +974,16 @@ export default function HomeScreen() {
                     { color: rankCategory === cat ? '#fff' : (isDark ? '#aaa' : '#666') },
                   ]}
                 >
-                  {cat === 'friends' ? 'Friends' : cat === 'gyms' ? 'Gyms' : 'National'}
+                  {cat === 'friends' ? 'Friends' : cat === 'gym' ? 'Gym' : 'National'}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          {rankCategory === 'gyms' && (
+          {rankCategory === 'gym' && (
             <>
               <ThemedText style={styles.rankGymCaption}>
-                Showing climbers at {rankGym?.name ?? 'Selected Gym'}
+                Top climbers at {rankGym?.name ?? 'Selected Gym'}
               </ThemedText>
               <ScrollView
                 horizontal
@@ -1030,63 +1015,85 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* Podium */}
-          <AnimatedPodium
-            entries={rankEntries}
-            currentUserId={CURRENT_USER.id}
-          />
-
-          {/* Community Stats */}
-          {rankEntries.length > 0 && (
-            <View style={styles.lbStatsRow}>
-              <RankStatHighlight
-                label="Top Climber"
-                value={rankEntries[0].user.displayName.split(' ')[0]}
-              />
-              <RankStatHighlight
-                label="Total Hours"
-                value={`${Math.round(rankEntries.reduce((sum, entry) => sum + entry.totalMinutes, 0) / 60)}h`}
-              />
-              <RankStatHighlight
-                label="Sessions"
-                value={String(rankEntries.reduce((sum, entry) => sum + entry.totalSessions, 0))}
-              />
+          {currentRankLoading && (
+            <View style={styles.lbStateCard}>
+              <ActivityIndicator size="small" color={AppColors.primary} />
+              <ThemedText style={styles.lbStateText}>Loading rankings...</ThemedText>
             </View>
           )}
 
-          {rankEntries.length === 0 && (
-            <View style={styles.lbEmptyState}>
-              <ThemedText style={styles.lbEmptyText}>
-                {rankCategory === 'gyms'
-                  ? 'No completed sessions at this gym yet.'
-                  : 'No rankings available yet.'}
-              </ThemedText>
+          {!currentRankLoading && currentRankError && (
+            <View style={styles.lbStateCard}>
+              <ThemedText style={styles.lbStateText}>{currentRankError}</ThemedText>
+              <Pressable style={styles.lbRetryButton} onPress={() => void refreshCategory(rankCategory)}>
+                <ThemedText style={styles.lbRetryButtonText}>Retry</ThemedText>
+              </Pressable>
             </View>
           )}
 
-          {/* Your Position */}
-          {showPodium && currentUserRankEntry && currentUserRankEntry.rank > 3 && (
-            <View style={styles.lbYourPositionSection}>
-              <ThemedText type="subtitle" style={styles.lbSectionTitle}>
-                Your Position
-              </ThemedText>
-              <RankLeaderboardCard entry={currentUserRankEntry} isCurrentUser={true} />
-            </View>
-          )}
-
-          {/* Full Leaderboard (4th place onwards when podium is shown) */}
-          <View style={styles.lbLeaderboardSection}>
-            <ThemedText type="subtitle" style={styles.lbSectionTitle}>
-              Rankings
-            </ThemedText>
-            {rankingListEntries.map((entry) => (
-              <RankLeaderboardCard
-                key={entry.userId}
-                entry={entry}
-                isCurrentUser={entry.userId === CURRENT_USER.id}
+          {!currentRankLoading && !currentRankError && (
+            <>
+              {/* Podium */}
+              <AnimatedPodium
+                entries={rankEntries}
+                currentUserId={viewerUserId ?? ''}
               />
-            ))}
-          </View>
+
+              {/* Community Stats */}
+              {rankEntries.length > 0 && (
+                <View style={styles.lbStatsRow}>
+                  <RankStatHighlight
+                    label="Top Climber"
+                    value={rankEntries[0].user.displayName.split(' ')[0]}
+                  />
+                  <RankStatHighlight
+                    label="Total Hours"
+                    value={`${Math.round(rankEntries.reduce((sum, entry) => sum + entry.totalMinutes, 0) / 60)}h`}
+                  />
+                  <RankStatHighlight
+                    label="Sessions"
+                    value={String(rankEntries.reduce((sum, entry) => sum + entry.totalSessions, 0))}
+                  />
+                </View>
+              )}
+
+              {rankEntries.length === 0 && (
+                <View style={styles.lbEmptyState}>
+                  <ThemedText style={styles.lbEmptyText}>
+                    {rankCategory === 'gym'
+                      ? 'No completed sessions at this gym yet.'
+                      : 'No rankings available yet.'}
+                  </ThemedText>
+                </View>
+              )}
+
+              {/* Your Position */}
+              {showPodium && currentUserRankEntry && currentUserRankEntry.rank > 3 && (
+                <View style={styles.lbYourPositionSection}>
+                  <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+                    Your Position
+                  </ThemedText>
+                  <RankLeaderboardCard entry={currentUserRankEntry} isCurrentUser={true} />
+                </View>
+              )}
+
+              {/* Full Leaderboard (4th place onwards when podium is shown) */}
+              {rankingListEntries.length > 0 && (
+                <View style={styles.lbLeaderboardSection}>
+                  <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+                    Rankings
+                  </ThemedText>
+                  {rankingListEntries.map((entry) => (
+                    <RankLeaderboardCard
+                      key={entry.userId}
+                      entry={entry}
+                      isCurrentUser={viewerUserId != null && entry.userId === viewerUserId}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </ScrollView>
       </View>
       </Reanimated.View>
@@ -1471,6 +1478,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  newSessionButtonLoading: {
+    opacity: 0.8,
   },
   summaryActionsRow: {
     flexDirection: 'row',
@@ -2190,6 +2200,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     marginBottom: 20,
+  },
+  lbStateCard: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+  lbStateText: {
+    fontSize: 13,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  lbRetryButton: {
+    backgroundColor: AppColors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  lbRetryButtonText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '700',
   },
   lbEmptyText: {
     fontSize: 13,

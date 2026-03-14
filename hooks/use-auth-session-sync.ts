@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { hasSupabaseConfig } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase } from '@/lib/supabase';
 import {
   useAuthStore,
   useNotificationStore,
@@ -10,18 +10,17 @@ import {
   useSocialStore,
 } from '@/stores';
 
-export function useBootstrapStoreSync() {
+export function useAuthSessionSync() {
   useEffect(() => {
-    let cancelled = false;
+    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) return;
 
-    const bootstrap = async () => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async () => {
       const authResult = await useAuthStore.getState().initialize();
-      if (cancelled || !authResult.ok) return;
+      if (!authResult.ok) return;
 
-      const user = authResult.data;
-      const requiresAuthUser = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseAuth;
-
-      if (requiresAuthUser && !user) {
+      if (!authResult.data) {
         useSessionStore.getState().resetForSignedOut();
         useSettingsStore.getState().resetForSignedOut();
         useSocialStore.getState().resetForSignedOut();
@@ -35,12 +34,10 @@ export function useBootstrapStoreSync() {
         useSocialStore.getState().initialize(),
         useNotificationStore.getState().initialize(),
       ]);
-    };
-
-    void bootstrap();
+    });
 
     return () => {
-      cancelled = true;
+      subscription.unsubscribe();
     };
   }, []);
 }

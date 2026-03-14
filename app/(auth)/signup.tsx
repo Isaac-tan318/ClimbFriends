@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores';
 import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   Platform,
@@ -37,6 +38,8 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const signUp = useAuthStore((state) => state.signUp);
   const authLoading = useAuthStore((state) => state.loading);
+  const authInitialized = useAuthStore((state) => state.initialized);
+  const authUser = useAuthStore((state) => state.user);
   const router = useRouter();
 
   const canSubmit =
@@ -83,8 +86,24 @@ export default function SignupScreen() {
       return;
     }
 
-    router.replace('/(tabs)');
+    if (result.data.requiresEmailConfirmation) {
+      Alert.alert(
+        'Check your email',
+        'Your account was created. Confirm your email first, then log in.',
+        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }],
+      );
+      return;
+    }
+
   };
+
+  if (!authInitialized || authUser) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={AppColors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -159,7 +178,11 @@ export default function SignupScreen() {
               disabled={!canSubmit || authLoading}
               onPress={() => void handleSignup()}
             >
-              <Text style={styles.primaryButtonText}>{authLoading ? 'Creating account...' : 'Sign Up'}</Text>
+              {authLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Sign Up</Text>
+              )}
             </Pressable>
           </View>
 
@@ -252,5 +275,9 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

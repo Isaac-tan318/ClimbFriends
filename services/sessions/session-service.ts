@@ -83,10 +83,16 @@ const getMockSessionsForUser = (userId: string): ClimbingSession[] =>
     (a, b) => b.startedAt.getTime() - a.startedAt.getTime(),
   );
 
+const isSupabaseSessionsEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseSessions;
+
 export const sessionService = {
   async getSessions(userId: string): Promise<AppResult<ClimbingSession[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSessions) {
+    if (!isSupabaseSessionsEnabled) {
       return ok(getMockSessionsForUser(userId));
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -127,6 +133,10 @@ export const sessionService = {
   },
 
   async getStats(userId: string): Promise<AppResult<UserStats>> {
+    if (isSupabaseSessionsEnabled && !userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const sessionsResult = await this.getSessions(userId);
     if (!sessionsResult.ok) return sessionsResult;
 
@@ -134,7 +144,7 @@ export const sessionService = {
   },
 
   async startSession(userId: string, gymId: string): Promise<AppResult<ClimbingSession>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSessions) {
+    if (!isSupabaseSessionsEnabled) {
       return ok({
         id: `session-${Date.now()}`,
         userId,
@@ -145,6 +155,10 @@ export const sessionService = {
         isActive: true,
         climbs: [],
       });
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -226,7 +240,7 @@ export const sessionService = {
     wall: string;
     instagramUrl?: string;
   }): Promise<AppResult<LoggedClimb>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSessions) {
+    if (!isSupabaseSessionsEnabled) {
       return ok({
         id: `climb-${Date.now()}`,
         sessionId: input.sessionId,
@@ -237,6 +251,10 @@ export const sessionService = {
         instagramUrl: input.instagramUrl ?? '',
         loggedAt: new Date(),
       });
+    }
+
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -258,6 +276,25 @@ export const sessionService = {
       return err(error?.message ?? 'Unable to log climb', error?.code, error);
     }
 
-    return ok(mapClimb(data as DbClimbRow));
+    const climbRow = data as DbClimbRow;
+    const { error: feedPostError } = await client.from('feed_posts').insert({
+      type: 'send',
+      user_id: input.userId,
+      gym_id: input.gymId,
+      session_id: input.sessionId,
+      grade: input.grade,
+      color: input.color,
+      wall: input.wall,
+      instagram_url: input.instagramUrl ?? null,
+      description: null,
+    });
+
+    if (feedPostError) {
+      // Best-effort rollback to keep climb + feed write in sync when send post creation fails.
+      await client.from('logged_climbs').delete().eq('id', climbRow.id);
+      return err(feedPostError.message, feedPostError.code, feedPostError);
+    }
+
+    return ok(mapClimb(climbRow));
   },
 };

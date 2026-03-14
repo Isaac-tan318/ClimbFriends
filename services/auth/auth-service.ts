@@ -22,6 +22,20 @@ const mapProfile = (row: DbProfileRow): User => ({
   createdAt: fromIsoOrNow(row.created_at),
 });
 
+const mapSessionUser = (input: {
+  id: string;
+  email?: string | null;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  createdAt?: string | null;
+}): User => ({
+  id: input.id,
+  email: input.email ?? '',
+  displayName: input.displayName?.trim() || 'Climber',
+  avatarUrl: input.avatarUrl ?? undefined,
+  createdAt: fromIsoOrNow(input.createdAt),
+});
+
 const upsertProfile = async (input: {
   id: string;
   email?: string;
@@ -64,17 +78,29 @@ export const authService = {
     }
 
     const {
-      data: { user },
+      data: { session },
       error,
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getSession();
 
     if (error) {
       return err(error.message, error.code, error);
     }
 
+    const user = session?.user ?? null;
     if (!user) {
       return ok(null);
     }
+
+    const fallbackUser = mapSessionUser({
+      id: user.id,
+      email: user.email,
+      displayName:
+        (user.user_metadata?.display_name as string | undefined) ??
+        (user.user_metadata?.full_name as string | undefined) ??
+        null,
+      avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
+      createdAt: user.created_at ?? null,
+    });
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -83,7 +109,8 @@ export const authService = {
       .maybeSingle();
 
     if (profileError) {
-      return err(profileError.message, profileError.code, profileError);
+      console.warn('Profile lookup failed during session restore:', profileError.message);
+      return ok(fallbackUser);
     }
 
     if (profile) {
@@ -97,7 +124,10 @@ export const authService = {
       avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
     });
 
-    if (!seededProfile.ok) return seededProfile;
+    if (!seededProfile.ok) {
+      console.warn('Profile seed failed during session restore:', seededProfile.error.message);
+      return ok(fallbackUser);
+    }
     return ok(seededProfile.data);
   },
 
@@ -105,9 +135,19 @@ export const authService = {
     email: string;
     password: string;
     displayName: string;
-  }): Promise<AppResult<User>> {
+  }): Promise<
+    AppResult<{
+      user: User;
+      sessionStarted: boolean;
+      requiresEmailConfirmation: boolean;
+    }>
+  > {
     if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) {
-      return ok(CURRENT_USER);
+      return ok({
+        user: CURRENT_USER,
+        sessionStarted: true,
+        requiresEmailConfirmation: false,
+      });
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -124,11 +164,30 @@ export const authService = {
       return err(error?.message ?? 'Unable to sign up', error?.code, error);
     }
 
-    return ok({
+    const fallbackUser = mapSessionUser({
       id: data.user.id,
-      email: data.user.email || params.email,
-      displayName: params.displayName,
-      createdAt: new Date()
+      email: data.user.email ?? params.email,
+      displayName:
+        (data.user.user_metadata?.display_name as string | undefined) ?? params.displayName,
+      avatarUrl: (data.user.user_metadata?.avatar_url as string | undefined) ?? null,
+      createdAt: data.user.created_at ?? null,
+    });
+
+    if (!data.session) {
+      return ok({
+        user: fallbackUser,
+        sessionStarted: false,
+        requiresEmailConfirmation: true,
+      });
+    }
+
+    const profileResult = await this.getSessionUser();
+    const user = profileResult.ok && profileResult.data ? profileResult.data : fallbackUser;
+
+    return ok({
+      user,
+      sessionStarted: true,
+      requiresEmailConfirmation: false,
     });
   },
 

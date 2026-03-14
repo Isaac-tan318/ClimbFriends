@@ -27,10 +27,16 @@ const mapNotification = (row: DbNotification): Notification => ({
   createdAt: fromIsoOrNow(row.created_at),
 });
 
+const isSupabaseNotificationsEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseNotifications;
+
 export const notificationService = {
   async getNotifications(userId: string, unreadOnly = false): Promise<AppResult<Notification[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseNotifications) {
+    if (!isSupabaseNotificationsEnabled) {
       return ok([]);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -72,8 +78,12 @@ export const notificationService = {
   },
 
   async markAllRead(userId: string): Promise<AppResult<void>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseNotifications) {
+    if (!isSupabaseNotificationsEnabled) {
       return ok(undefined);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();

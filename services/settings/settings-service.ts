@@ -19,10 +19,16 @@ const mapSettings = (row: DbSettingsRow): UserSettings => ({
   notificationsEnabled: row.notifications_enabled,
 });
 
+const isSupabaseAuthEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseAuth;
+
 export const settingsService = {
   async getSettings(userId: string): Promise<AppResult<UserSettings>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth) {
+    if (!isSupabaseAuthEnabled) {
       return ok(CURRENT_USER_SETTINGS);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -54,8 +60,12 @@ export const settingsService = {
     userId: string,
     partial: Partial<UserSettings>,
   ): Promise<AppResult<UserSettings>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth) {
+    if (!isSupabaseAuthEnabled) {
       return ok({ ...CURRENT_USER_SETTINGS, ...partial, userId });
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();

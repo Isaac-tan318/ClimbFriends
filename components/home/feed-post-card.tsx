@@ -17,6 +17,7 @@ type FeedPostCardProps = {
   surfaceBg: string;
   onToggleExpanded: (postId: string) => void;
   getColorHex: (colorName: string) => string;
+  description?: string;
 };
 
 function feedFormatDuration(mins: number): string {
@@ -36,6 +37,7 @@ function FeedPostCardInner({
   surfaceBg,
   onToggleExpanded,
   getColorHex,
+  description,
 }: FeedPostCardProps) {
   const initials = item.userName
     .split(' ')
@@ -63,7 +65,7 @@ function FeedPostCardInner({
       </View>
 
       <Text style={[styles.feedTitle, { color: textColor }]}>
-        {`${firstName} climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`}
+        {description !== '' ? description : `I climbed for ${feedFormatDuration(item.sessionDurationMinutes ?? 0)}!`}
       </Text>
 
       <View style={styles.feedMetricsRow}>

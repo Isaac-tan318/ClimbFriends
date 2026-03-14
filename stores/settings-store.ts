@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { CURRENT_USER_SETTINGS } from '@/data/mock-users';
+import { hasSupabaseConfig } from '@/lib/supabase';
 import type { UserSettings } from '@/types';
 import { getCurrentUserId } from '@/services/auth/current-user';
 import { settingsService } from '@/services/settings/settings-service';
@@ -21,6 +23,7 @@ interface SettingsState {
   setFriendVisibilityEnabled: (enabled: boolean) => Promise<AppResult<UserSettings>>;
   setNotificationsEnabled: (enabled: boolean) => Promise<AppResult<UserSettings>>;
   updateSettings: (partial: Partial<UserSettings>) => Promise<AppResult<UserSettings>>;
+  resetForSignedOut: () => void;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -30,9 +33,14 @@ const DEFAULT_SETTINGS: UserSettings = {
   notificationsEnabled: true,
 };
 
-const initialSettings = CURRENT_USER_SETTINGS ?? DEFAULT_SETTINGS;
+const useMockSettings = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth;
+const initialSettings = useMockSettings ? (CURRENT_USER_SETTINGS ?? DEFAULT_SETTINGS) : DEFAULT_SETTINGS;
 
-const resolveUserId = async () => (await getCurrentUserId()) ?? initialSettings.userId;
+const resolveUserId = async (): Promise<string | null> => {
+  const userId = await getCurrentUserId();
+  if (userId) return userId;
+  return useMockSettings ? initialSettings.userId : null;
+};
 
 const withSyncStart = (set: (partial: Partial<SettingsState>) => void) => {
   set({ sync: { loading: true, initialized: true, source: 'mock', error: null } });
@@ -50,6 +58,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   initialize: async () => {
     withSyncStart(set);
     const userId = await resolveUserId();
+    if (!userId) {
+      set({
+        settings: { ...DEFAULT_SETTINGS, userId: '' },
+        sync: {
+          loading: false,
+          initialized: true,
+          source: 'supabase',
+          error: null,
+        },
+      });
+      return ok({ ...DEFAULT_SETTINGS, userId: '' });
+    }
+
     const result = await settingsService.getSettings(userId);
 
     if (!result.ok) {
@@ -68,7 +89,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       sync: {
         loading: false,
         initialized: true,
-        source: result.data.userId === initialSettings.userId ? 'mock' : 'supabase',
+        source: useMockSettings ? 'mock' : 'supabase',
         error: null,
       },
     });
@@ -89,6 +110,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ settings: optimistic });
 
     const userId = await resolveUserId();
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const result = await settingsService.updateSettings(userId, partial);
 
     if (!result.ok) {
@@ -108,7 +133,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       sync: {
         loading: false,
         initialized: true,
-        source: result.data.userId === initialSettings.userId ? 'mock' : 'supabase',
+        source: useMockSettings ? 'mock' : 'supabase',
         error: null,
       },
     });
@@ -123,4 +148,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setNotificationsEnabled: async (enabled) =>
     get().updateSettings({ notificationsEnabled: enabled }),
+
+  resetForSignedOut: () => {
+    set({
+      settings: { ...DEFAULT_SETTINGS, userId: '' },
+      sync: {
+        loading: false,
+        initialized: true,
+        source: 'supabase',
+        error: null,
+      },
+    });
+  },
 }));

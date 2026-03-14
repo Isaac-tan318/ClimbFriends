@@ -1,5 +1,5 @@
 // Supabase Edge Function: compute-leaderboards
-// Useful for scheduled refresh if leaderboard views become materialized views.
+// Useful for scheduled refresh if user ranking queries become materialized views.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
+  // Current product rankings are friends, gym-user, and national.
   // If you switch to materialized views, call refresh here.
   // Example:
   // await supabase.rpc('refresh_materialized_leaderboards');
@@ -27,7 +28,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: nationalError.message }), { status: 400 });
   }
 
-  return new Response(JSON.stringify({ preview: national ?? [] }), {
+  return new Response(JSON.stringify({ national_preview: national ?? [] }), {
     headers: { 'Content-Type': 'application/json' },
     status: 200,
   });

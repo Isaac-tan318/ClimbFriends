@@ -35,6 +35,9 @@ type DbProfileRow = {
 
 const userNameMap = new Map(MOCK_USERS.map((user) => [user.id, user.displayName]));
 
+const buildProfileNameMap = (profiles: DbProfileRow[]) =>
+  new Map<string, string>(profiles.map((profile) => [profile.id, profile.display_name ?? 'Climber']));
+
 const mapFeedPost = (row: DbFeedPostRow, userName: string, climbedWithNames: string[]): BetaPost => ({
   id: row.id,
   type: row.type,
@@ -93,9 +96,7 @@ export const feedService = {
       return err(profileError.message, profileError.code, profileError);
     }
 
-    const profileMap = new Map<string, string>(
-      ((profiles ?? []) as DbProfileRow[]).map((profile) => [profile.id, profile.display_name ?? 'Climber']),
-    );
+    const profileMap = buildProfileNameMap((profiles ?? []) as DbProfileRow[]);
 
     const postIds = rows.map((row) => row.id);
     const { data: climbedWithRows, error: climbedWithError } = postIds.length
@@ -173,6 +174,10 @@ export const feedService = {
       });
     }
 
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const client = getSupabaseClient();
 
     const { data, error } = await client
@@ -202,7 +207,23 @@ export const feedService = {
       await client.from('feed_post_climbed_with').upsert(joinRows, { onConflict: 'feed_post_id,user_id' });
     }
 
-    const userName = userNameMap.get(input.userId) ?? 'Climber';
-    return ok(mapFeedPost(data as DbFeedPostRow, userName, []));
+    const profileIds = Array.from(
+      new Set([input.userId, ...(input.climbedWithUserIds ?? [])].filter((id): id is string => Boolean(id))),
+    );
+
+    const { data: publishedProfiles, error: publishedProfilesError } = profileIds.length
+      ? await client.from('profiles').select('id,display_name').in('id', profileIds)
+      : { data: [], error: null };
+
+    if (publishedProfilesError) {
+      return err(publishedProfilesError.message, publishedProfilesError.code, publishedProfilesError);
+    }
+
+    const profileMap = buildProfileNameMap((publishedProfiles ?? []) as DbProfileRow[]);
+    const userName = profileMap.get(input.userId) ?? userNameMap.get(input.userId) ?? 'Climber';
+    const climbedWithNames =
+      input.climbedWithUserIds?.map((id) => profileMap.get(id) ?? userNameMap.get(id) ?? 'Climber') ?? [];
+
+    return ok(mapFeedPost(data as DbFeedPostRow, userName, climbedWithNames));
   },
 };

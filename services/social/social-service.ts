@@ -1,8 +1,8 @@
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { MOCK_FRIENDS } from '@/data/mock-users';
+import { MOCK_FRIENDS, MOCK_USERS } from '@/data/mock-users';
 import { MOCK_PLANNED_VISITS } from '@/data/mock-plans';
 import { getSupabaseClient, hasSupabaseConfig } from '@/lib/supabase';
-import type { Friend, FriendRequest, PlannedVisit, VisitInvite } from '@/types';
+import type { Friend, FriendRequest, PlannedVisit, User, VisitInvite } from '@/types';
 
 import { fromIso, fromIsoOrNow, toIso } from '@/services/api/date';
 import { err, ok, type AppResult } from '@/services/api/result';
@@ -77,10 +77,99 @@ const mapPlannedVisit = (row: DbPlannedVisit, invitees: VisitInvite[]): PlannedV
   invitees,
 });
 
+const isSupabaseSocialEnabled = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseSocial;
+
+const mapUser = (profile: DbProfile): User => ({
+  id: profile.id,
+  email: profile.email ?? '',
+  displayName: profile.display_name ?? 'Climber',
+  avatarUrl: profile.avatar_url ?? undefined,
+  createdAt: fromIsoOrNow(profile.created_at),
+});
+
+const buildUserMap = (profiles: DbProfile[]): Map<string, User> =>
+  new Map(profiles.map((profile) => [profile.id, mapUser(profile)]));
+
+const notifySocialEvent = async (input: {
+  targetUserId: string;
+  type: 'friend_request' | 'friend_request_accepted' | 'plan_invite' | 'plan_response';
+  title: string;
+  body?: string;
+  data?: Record<string, unknown>;
+}) => {
+  if (!isSupabaseSocialEnabled) return;
+  const client = getSupabaseClient();
+  const { error } = await client.rpc('create_social_notification', {
+    target_user_id: input.targetUserId,
+    notification_type: input.type,
+    notification_title: input.title,
+    notification_body: input.body ?? null,
+    notification_data: input.data ?? {},
+  });
+
+  if (error) {
+    // Keep primary action successful even if notification fanout fails.
+    console.warn('create_social_notification failed:', error.message);
+  }
+};
+
 export const socialService = {
+  async searchUsers(userId: string, query: string, limit = 20): Promise<AppResult<User[]>> {
+    if (!isSupabaseSocialEnabled) {
+      const needle = query.trim().toLowerCase();
+      if (!needle) return ok([]);
+
+      const local = MOCK_FRIENDS
+        .concat(
+          MOCK_USERS
+            .filter((user) => !MOCK_FRIENDS.some((friend) => friend.id === user.id))
+            .map((user) => ({
+              ...user,
+              currentGymId: null,
+              lastSeenAt: null,
+              isAtGym: false,
+            })),
+        )
+        .filter((candidate) => candidate.id !== userId)
+        .filter((candidate) =>
+          candidate.displayName.toLowerCase().includes(needle) || candidate.email.toLowerCase().includes(needle),
+        )
+        .slice(0, limit)
+        .map((candidate) => ({
+          id: candidate.id,
+          email: candidate.email,
+          displayName: candidate.displayName,
+          avatarUrl: candidate.avatarUrl,
+          createdAt: candidate.createdAt,
+        }));
+
+      return ok(local);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
+    const client = getSupabaseClient();
+    const { data, error } = await client.rpc('search_profiles', {
+      search_text: query,
+      result_limit: limit,
+    });
+
+    if (error || !data) {
+      return err(error?.message ?? 'Unable to search users', error?.code, error);
+    }
+
+    return ok((data as DbProfile[]).map(mapUser));
+  },
+
   async listFriends(userId: string): Promise<AppResult<Friend[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok(MOCK_FRIENDS);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -134,8 +223,12 @@ export const socialService = {
   },
 
   async listFriendRequests(userId: string): Promise<AppResult<FriendRequest[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok([]);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -150,19 +243,38 @@ export const socialService = {
       return err(error.message, error.code, error);
     }
 
+    const rows = (data ?? []) as DbFriendship[];
+    const profileIds = Array.from(new Set(rows.flatMap((row) => [row.requester_id, row.addressee_id])));
+
+    let userMap = new Map<string, User>();
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profileError } = await client
+        .from('profiles')
+        .select('id,email,display_name,avatar_url,created_at')
+        .in('id', profileIds);
+
+      if (profileError) {
+        return err(profileError.message, profileError.code, profileError);
+      }
+
+      userMap = buildUserMap((profiles ?? []) as DbProfile[]);
+    }
+
     return ok(
-      ((data ?? []) as DbFriendship[]).map((row) => ({
+      rows.map((row) => ({
         id: row.id,
         requesterId: row.requester_id,
         addresseeId: row.addressee_id,
         status: row.status,
         createdAt: fromIsoOrNow(row.created_at),
+        requester: userMap.get(row.requester_id),
+        addressee: userMap.get(row.addressee_id),
       })),
     );
   },
 
   async sendFriendRequest(userId: string, targetUserId: string): Promise<AppResult<FriendRequest>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok({
         id: `friendship-${Date.now()}`,
         requesterId: userId,
@@ -172,22 +284,75 @@ export const socialService = {
       });
     }
 
-    const client = getSupabaseClient();
-    const { data, error } = await client
-      .from('friendships')
-      .insert({
-        requester_id: userId,
-        addressee_id: targetUserId,
-        status: 'pending',
-      })
-      .select('id,requester_id,addressee_id,status,created_at,updated_at')
-      .single();
-
-    if (error || !data) {
-      return err(error?.message ?? 'Unable to send friend request', error?.code, error);
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
-    const row = data as DbFriendship;
+    if (!targetUserId) {
+      return err('Target user is required', 'VALIDATION_ERROR');
+    }
+
+    const client = getSupabaseClient();
+    const { data: existing, error: existingError } = await client
+      .from('friendships')
+      .select('id,requester_id,addressee_id,status,created_at,updated_at')
+      .or(
+        `and(requester_id.eq.${userId},addressee_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},addressee_id.eq.${userId})`,
+      )
+      .maybeSingle();
+
+    if (existingError) {
+      return err(existingError.message, existingError.code, existingError);
+    }
+
+    let row: DbFriendship | null = null;
+
+    if (existing) {
+      const existingRow = existing as DbFriendship;
+      if (existingRow.status === 'pending' || existingRow.status === 'accepted') {
+        return err('Friend request already exists', 'CONFLICT');
+      }
+
+      const { data: updated, error: updateError } = await client
+        .from('friendships')
+        .update({
+          requester_id: userId,
+          addressee_id: targetUserId,
+          status: 'pending',
+        })
+        .eq('id', existingRow.id)
+        .select('id,requester_id,addressee_id,status,created_at,updated_at')
+        .single();
+
+      if (updateError || !updated) {
+        return err(updateError?.message ?? 'Unable to send friend request', updateError?.code, updateError);
+      }
+      row = updated as DbFriendship;
+    } else {
+      const { data, error } = await client
+        .from('friendships')
+        .insert({
+          requester_id: userId,
+          addressee_id: targetUserId,
+          status: 'pending',
+        })
+        .select('id,requester_id,addressee_id,status,created_at,updated_at')
+        .single();
+
+      if (error || !data) {
+        return err(error?.message ?? 'Unable to send friend request', error?.code, error);
+      }
+      row = data as DbFriendship;
+    }
+
+    await notifySocialEvent({
+      targetUserId,
+      type: 'friend_request',
+      title: 'New friend request',
+      body: 'Someone wants to connect with you.',
+      data: { friendship_id: row.id },
+    });
+
     return ok({
       id: row.id,
       requesterId: row.requester_id,
@@ -200,16 +365,37 @@ export const socialService = {
   async respondToFriendRequest(
     requestId: string,
     status: 'accepted' | 'rejected',
+    actorUserId: string,
   ): Promise<AppResult<FriendRequest>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return err('Mock friend request update not supported in fallback mode', 'NOT_SUPPORTED');
     }
 
+    if (!actorUserId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const client = getSupabaseClient();
+    const { data: existing, error: existingError } = await client
+      .from('friendships')
+      .select('id,requester_id,addressee_id,status,created_at,updated_at')
+      .eq('id', requestId)
+      .maybeSingle();
+
+    if (existingError || !existing) {
+      return err(existingError?.message ?? 'Friend request not found', existingError?.code, existingError);
+    }
+
+    const existingRow = existing as DbFriendship;
+    if (existingRow.addressee_id !== actorUserId) {
+      return err('Only the request recipient can respond', 'FORBIDDEN');
+    }
+
     const { data, error } = await client
       .from('friendships')
       .update({ status })
       .eq('id', requestId)
+      .eq('addressee_id', actorUserId)
       .select('id,requester_id,addressee_id,status,created_at,updated_at')
       .single();
 
@@ -218,6 +404,17 @@ export const socialService = {
     }
 
     const row = data as DbFriendship;
+
+    if (status === 'accepted') {
+      await notifySocialEvent({
+        targetUserId: row.requester_id,
+        type: 'friend_request_accepted',
+        title: 'Friend request accepted',
+        body: 'Your friend request has been accepted.',
+        data: { friendship_id: row.id },
+      });
+    }
+
     return ok({
       id: row.id,
       requesterId: row.requester_id,
@@ -227,9 +424,34 @@ export const socialService = {
     });
   },
 
+  async removeFriend(userId: string, targetUserId: string): Promise<AppResult<void>> {
+    if (!isSupabaseSocialEnabled) {
+      return ok(undefined);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
+    const client = getSupabaseClient();
+    const { error } = await client.rpc('remove_friend', {
+      target_user_id: targetUserId,
+    });
+
+    if (error) {
+      return err(error.message, error.code, error);
+    }
+
+    return ok(undefined);
+  },
+
   async listPlannedVisits(userId: string): Promise<AppResult<PlannedVisit[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok(MOCK_PLANNED_VISITS);
+    }
+
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -311,7 +533,7 @@ export const socialService = {
     plannedDate: Date;
     message?: string;
   }): Promise<AppResult<PlannedVisit>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok({
         id: `plan-${Date.now()}`,
         userId: input.userId,
@@ -321,6 +543,10 @@ export const socialService = {
         createdAt: new Date(),
         invitees: [],
       });
+    }
+
+    if (!input.userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
     const client = getSupabaseClient();
@@ -346,7 +572,7 @@ export const socialService = {
     plannedVisitId: string;
     inviteeIds: string[];
   }): Promise<AppResult<VisitInvite[]>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok(
         input.inviteeIds.map((inviteeId, index) => ({
           id: `invite-${Date.now()}-${index}`,
@@ -373,7 +599,19 @@ export const socialService = {
       return err(error?.message ?? 'Unable to invite friends', error?.code, error);
     }
 
-    return ok((data as DbVisitInvite[]).map(mapInvite));
+    const mapped = (data as DbVisitInvite[]).map(mapInvite);
+
+    for (const invite of mapped) {
+      await notifySocialEvent({
+        targetUserId: invite.inviteeId,
+        type: 'plan_invite',
+        title: 'You were invited to a climb plan',
+        body: 'Open plans to respond.',
+        data: { planned_visit_id: invite.plannedVisitId },
+      });
+    }
+
+    return ok(mapped);
   },
 
   async respondToInvite(input: {
@@ -381,7 +619,7 @@ export const socialService = {
     inviteeId: string;
     status: 'accepted' | 'declined';
   }): Promise<AppResult<VisitInvite>> {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial) {
+    if (!isSupabaseSocialEnabled) {
       return ok({
         id: `invite-${Date.now()}`,
         plannedVisitId: input.plannedVisitId,
@@ -406,6 +644,26 @@ export const socialService = {
       return err(error?.message ?? 'Unable to respond to invite', error?.code, error);
     }
 
-    return ok(mapInvite(data as DbVisitInvite));
+    const mappedInvite = mapInvite(data as DbVisitInvite);
+    const { data: planOwner, error: planOwnerError } = await client
+      .from('planned_visits')
+      .select('user_id')
+      .eq('id', input.plannedVisitId)
+      .maybeSingle();
+
+    if (!planOwnerError && planOwner?.user_id) {
+      await notifySocialEvent({
+        targetUserId: planOwner.user_id as string,
+        type: 'plan_response',
+        title: 'Plan invite updated',
+        body: `An invitee has ${input.status} your plan.`,
+        data: {
+          planned_visit_id: input.plannedVisitId,
+          status: input.status,
+        },
+      });
+    }
+
+    return ok(mappedInvite);
   },
 };

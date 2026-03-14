@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
+import { hasSupabaseConfig } from '@/lib/supabase';
 import type { Message } from '@/types';
 import { getCurrentUserId } from '@/services/auth/current-user';
 import { messageService } from '@/services/messages/message-service';
@@ -15,6 +17,13 @@ type MessageState = {
 };
 
 const DEFAULT_USER_ID = 'user-1';
+const useMockMessages = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseMessages;
+
+const resolveUserId = async (): Promise<string | null> => {
+  const userId = await getCurrentUserId();
+  if (userId) return userId;
+  return useMockMessages ? DEFAULT_USER_ID : null;
+};
 
 export const useMessageStore = create<MessageState>((set, get) => ({
   conversations: {},
@@ -23,7 +32,10 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
   loadConversation: async (otherUserId) => {
     set({ loading: true, error: null });
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
 
     const result = await messageService.getConversation({
       userId,
@@ -48,7 +60,11 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   sendMessage: async (otherUserId, content) => {
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const result = await messageService.sendMessage({
       senderId: userId,
       receiverId: otherUserId,
@@ -72,7 +88,11 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   markConversationRead: async (otherUserId) => {
-    const userId = (await getCurrentUserId()) ?? DEFAULT_USER_ID;
+    const userId = await resolveUserId();
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const result = await messageService.markConversationRead({
       readerId: userId,
       otherUserId,

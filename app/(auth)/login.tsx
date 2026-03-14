@@ -1,8 +1,10 @@
 import { AppColors, Colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores';
-import { Link, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Link } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   Platform,
@@ -22,6 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
+const LAST_LOGIN_EMAIL_KEY = 'auth:last-login-email';
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -35,9 +38,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const signIn = useAuthStore((state) => state.signIn);
   const authLoading = useAuthStore((state) => state.loading);
+  const authInitialized = useAuthStore((state) => state.initialized);
+  const authUser = useAuthStore((state) => state.user);
 
   const canSubmit = email.trim().length > 0 && password.length >= 6;
-  const router = useRouter();
 
   const translateY = useSharedValue(0);
   const mascotScale = useSharedValue(1);
@@ -70,6 +74,23 @@ export default function LoginScreen() {
     transform: [{ scale: mascotScale.value }],
   }));
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadStoredEmail = async () => {
+      const storedEmail = await AsyncStorage.getItem(LAST_LOGIN_EMAIL_KEY);
+      if (mounted && storedEmail) {
+        setEmail(storedEmail);
+      }
+    };
+
+    void loadStoredEmail();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleLogin = async () => {
     const result = await signIn(email.trim(), password);
     if (!result.ok) {
@@ -77,8 +98,16 @@ export default function LoginScreen() {
       return;
     }
 
-    router.replace('/(tabs)');
+    await AsyncStorage.setItem(LAST_LOGIN_EMAIL_KEY, email.trim());
   };
+
+  if (!authInitialized || authUser) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={AppColors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -96,7 +125,7 @@ export default function LoginScreen() {
             </Animated.View>
             <Text style={[styles.appName, { color: colors.text }]}>ClimbFriends</Text>
             <Text style={[styles.tagline, { color: isDark ? '#888' : '#666' }]}>
-              Track climbs. Find friends. Send harder.
+              Track climbs. Find friends. Send harder, Together.
             </Text>
           </View>
 
@@ -128,7 +157,11 @@ export default function LoginScreen() {
               disabled={!canSubmit || authLoading}
               onPress={() => void handleLogin()}
             >
-              <Text style={styles.primaryButtonText}>{authLoading ? 'Logging In...' : 'Log In'}</Text>
+              {authLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Log In</Text>
+              )}
             </Pressable>
 
             <Pressable style={styles.forgotButton}>
@@ -227,5 +260,9 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

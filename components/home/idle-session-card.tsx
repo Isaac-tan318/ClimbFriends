@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { AppColors } from '@/constants/theme';
@@ -7,9 +7,10 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 type IdleSessionCardProps = {
   onStart: () => void;
+  loading?: boolean;
 };
 
-export function IdleSessionCard({ onStart }: IdleSessionCardProps) {
+export function IdleSessionCard({ onStart, loading = false }: IdleSessionCardProps) {
   const cardBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
 
@@ -19,8 +20,12 @@ export function IdleSessionCard({ onStart }: IdleSessionCardProps) {
       <ThemedText style={styles.idleSubtitle}>
         Start a session manually or let auto-detect find your gym
       </ThemedText>
-      <Pressable style={styles.startButton} onPress={onStart}>
-        <ThemedText style={styles.startButtonText}>Start Climbing!</ThemedText>
+      <Pressable style={styles.startButton} onPress={onStart} disabled={loading}>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <ThemedText style={styles.startButtonText}>Start Climbing!</ThemedText>
+        )}
       </Pressable>
     </View>
   );

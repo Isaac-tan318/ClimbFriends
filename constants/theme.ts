@@ -48,6 +48,10 @@ export const AppColors = {
     light: '#374151',
     dark: '#e5e7eb',
   },
+  text: {
+    light: '#11181C',
+    dark: '#ECEDEE',
+  }
 };
 
 export const Colors = {

@@ -50,6 +50,10 @@ export const leaderboardService = {
       return ok(MOCK_LEADERBOARD);
     }
 
+    if (!userId) {
+      return err('Not authenticated', 'NOT_AUTHENTICATED');
+    }
+
     const client = getSupabaseClient();
     const { data, error } = await client.rpc('friends_leaderboard', { current_user_id: userId });
 
