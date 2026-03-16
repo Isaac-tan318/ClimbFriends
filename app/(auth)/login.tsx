@@ -101,13 +101,13 @@ export default function LoginScreen() {
     await AsyncStorage.setItem(LAST_LOGIN_EMAIL_KEY, email.trim());
   };
 
-  if (!authInitialized || authUser) {
-    return (
-      <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={AppColors.primary} />
-      </View>
-    );
-  }
+  // if (!authInitialized || authUser) {
+  //   return (
+  //     <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
+  //       <ActivityIndicator color={AppColors.primary} />
+  //     </View>
+  //   );
+  // }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

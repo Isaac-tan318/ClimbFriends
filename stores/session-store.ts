@@ -146,17 +146,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   refreshSessions: async () => {
     const userId = await resolveUserId();
     if (!userId) {
-      set({
+      set((state) => ({
         sessions: [],
         activeSession: null,
         stats: EMPTY_STATS,
         sync: {
+          ...state.sync,
           loading: false,
           initialized: true,
           source: 'supabase',
           error: null,
         },
-      });
+      }));
       return ok([]);
     }
 

@@ -37,17 +37,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialized: false,
   error: null,
 
-  initialize: async () => {
+initialize: async () => {
     set({ loading: true, error: null });
-    const result = await authService.getSessionUser();
+    
+    try {
+      console.log("Initializing auth store...");
+      const result = await authService.getSessionUser();
+      console.log("Auth initialization result:", result);
+      if (!result.ok) {
+        set({ loading: false, initialized: true, error: result.error.message });
+        return err(result.error.message, result.error.code, result.error.details);
+      }
 
-    if (!result.ok) {
-      set({ loading: false, initialized: true, error: result.error.message });
-      return err(result.error.message, result.error.code, result.error.details);
+      set({ user: result.data, loading: false, initialized: true, error: null });
+      return ok(result.data);
+      
+    } catch (e: any) {
+      console.error("Native storage crash during auth init:", e);
+      set({ 
+        user: null, 
+        loading: false, 
+        initialized: true, // <-- This is the magic key that unblocks your app
+        error: e.message || String(e) 
+      });
+      return err(e.message || String(e), 'INIT_CRASH');
     }
-
-    set({ user: result.data, loading: false, initialized: true, error: null });
-    return ok(result.data);
   },
 
   signIn: async (email, password) => {

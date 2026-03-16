@@ -16,7 +16,13 @@ export function useAuthSessionSync() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async () => {
+    } = supabase.auth.onAuthStateChange(async (event) => { // 1. Catch the event!
+      
+      // prevents deadlock!
+      if (event === 'SIGNED_OUT') {
+        return;
+      }
+
       const authResult = await useAuthStore.getState().initialize();
       if (!authResult.ok) return;
 

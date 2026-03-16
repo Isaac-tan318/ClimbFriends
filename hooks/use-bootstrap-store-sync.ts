@@ -29,11 +29,11 @@ export function useBootstrapStoreSync() {
         return;
       }
 
-      await Promise.all([
+      await Promise.allSettled([
         useSessionStore.getState().initialize(),
         useSettingsStore.getState().initialize(),
         useSocialStore.getState().initialize(),
-        useNotificationStore.getState().initialize(),
+        useNotificationStore.getState().initialize(), 
       ]);
     };
 

@@ -454,77 +454,82 @@ export const socialService = {
       return err('Not authenticated', 'NOT_AUTHENTICATED');
     }
 
-    const client = getSupabaseClient();
+    try {
+      const client = getSupabaseClient();
 
-    const { data: ownedPlans, error: ownedError } = await client
-      .from('planned_visits')
-      .select('id,user_id,gym_id,planned_date,message,created_at')
-      .eq('user_id', userId)
-      .order('planned_date', { ascending: true });
-
-    if (ownedError) {
-      return err(ownedError.message, ownedError.code, ownedError);
-    }
-
-    const { data: invites, error: inviteError } = await client
-      .from('visit_invites')
-      .select('id,planned_visit_id,invitee_id,status,created_at,responded_at')
-      .eq('invitee_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (inviteError) {
-      return err(inviteError.message, inviteError.code, inviteError);
-    }
-
-    const inviteRows = (invites ?? []) as DbVisitInvite[];
-    const invitedPlanIds = Array.from(new Set(inviteRows.map((invite) => invite.planned_visit_id)));
-
-    let invitedPlans: DbPlannedVisit[] = [];
-    if (invitedPlanIds.length > 0) {
-      const { data: invitedData, error: invitedError } = await client
+      const { data: ownedPlans, error: ownedError } = await client
         .from('planned_visits')
         .select('id,user_id,gym_id,planned_date,message,created_at')
-        .in('id', invitedPlanIds);
+        .eq('user_id', userId)
+        .order('planned_date', { ascending: true });
 
-      if (invitedError) {
-        return err(invitedError.message, invitedError.code, invitedError);
+      if (ownedError) {
+        return err(ownedError.message, ownedError.code, ownedError);
       }
 
-      invitedPlans = (invitedData ?? []) as DbPlannedVisit[];
-    }
-
-    const allPlans = [...(ownedPlans as DbPlannedVisit[]), ...invitedPlans];
-    const uniquePlans = new Map<string, DbPlannedVisit>();
-    for (const row of allPlans) uniquePlans.set(row.id, row);
-
-    const planIds = Array.from(uniquePlans.keys());
-    let allInvites: DbVisitInvite[] = inviteRows;
-
-    if (planIds.length > 0) {
-      const { data: planInvites, error: planInvitesError } = await client
+      const { data: invites, error: inviteError } = await client
         .from('visit_invites')
         .select('id,planned_visit_id,invitee_id,status,created_at,responded_at')
-        .in('planned_visit_id', planIds);
+        .eq('invitee_id', userId)
+        .order('created_at', { ascending: false });
 
-      if (planInvitesError) {
-        return err(planInvitesError.message, planInvitesError.code, planInvitesError);
+      if (inviteError) {
+        return err(inviteError.message, inviteError.code, inviteError);
       }
 
-      allInvites = (planInvites ?? []) as DbVisitInvite[];
+      const inviteRows = (invites ?? []) as DbVisitInvite[];
+      const invitedPlanIds = Array.from(new Set(inviteRows.map((invite) => invite.planned_visit_id)));
+
+      let invitedPlans: DbPlannedVisit[] = [];
+      if (invitedPlanIds.length > 0) {
+        const { data: invitedData, error: invitedError } = await client
+          .from('planned_visits')
+          .select('id,user_id,gym_id,planned_date,message,created_at')
+          .in('id', invitedPlanIds);
+
+        if (invitedError) {
+          return err(invitedError.message, invitedError.code, invitedError);
+        }
+
+        invitedPlans = (invitedData ?? []) as DbPlannedVisit[];
+      }
+
+      const ownedPlanRows = (ownedPlans ?? []) as DbPlannedVisit[];
+      const allPlans = [...ownedPlanRows, ...invitedPlans];
+      const uniquePlans = new Map<string, DbPlannedVisit>();
+      for (const row of allPlans) uniquePlans.set(row.id, row);
+
+      const planIds = Array.from(uniquePlans.keys());
+      let allInvites: DbVisitInvite[] = inviteRows;
+
+      if (planIds.length > 0) {
+        const { data: planInvites, error: planInvitesError } = await client
+          .from('visit_invites')
+          .select('id,planned_visit_id,invitee_id,status,created_at,responded_at')
+          .in('planned_visit_id', planIds);
+
+        if (planInvitesError) {
+          return err(planInvitesError.message, planInvitesError.code, planInvitesError);
+        }
+
+        allInvites = (planInvites ?? []) as DbVisitInvite[];
+      }
+
+      const inviteMap = new Map<string, VisitInvite[]>();
+      for (const invite of allInvites) {
+        const bucket = inviteMap.get(invite.planned_visit_id) ?? [];
+        bucket.push(mapInvite(invite));
+        inviteMap.set(invite.planned_visit_id, bucket);
+      }
+
+      const mapped = Array.from(uniquePlans.values())
+        .map((plan) => mapPlannedVisit(plan, inviteMap.get(plan.id) ?? []))
+        .sort((a, b) => a.plannedDate.getTime() - b.plannedDate.getTime());
+
+      return ok(mapped);
+    } catch (unknownError) {
+      return err('Unexpected planned visits fetch error', 'UNEXPECTED', unknownError);
     }
-
-    const inviteMap = new Map<string, VisitInvite[]>();
-    for (const invite of allInvites) {
-      const bucket = inviteMap.get(invite.planned_visit_id) ?? [];
-      bucket.push(mapInvite(invite));
-      inviteMap.set(invite.planned_visit_id, bucket);
-    }
-
-    const mapped = Array.from(uniquePlans.values())
-      .map((plan) => mapPlannedVisit(plan, inviteMap.get(plan.id) ?? []))
-      .sort((a, b) => a.plannedDate.getTime() - b.plannedDate.getTime());
-
-    return ok(mapped);
   },
 
   async createPlannedVisit(input: {
