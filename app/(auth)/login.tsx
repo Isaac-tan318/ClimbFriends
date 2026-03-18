@@ -26,6 +26,80 @@ import Animated, {
 const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
 const LAST_LOGIN_EMAIL_KEY = 'auth:last-login-email';
 
+type LoginFormProps = {
+  authLoading: boolean;
+  borderColor: string;
+  colors: { text: string };
+  initialEmail: string;
+  inputBg: string;
+  onLogin: (email: string, password: string) => Promise<void>;
+  placeholderColor: string;
+};
+
+const LoginForm = React.memo(function LoginForm({
+  authLoading,
+  borderColor,
+  colors,
+  initialEmail,
+  inputBg,
+  onLogin,
+  placeholderColor,
+}: LoginFormProps) {
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState('');
+  const canSubmit = email.trim().length > 0 && password.length >= 6;
+
+  useEffect(() => {
+    if (initialEmail && email.trim().length === 0) {
+      setEmail(initialEmail);
+    }
+  }, [email, initialEmail]);
+
+  return (
+    <View style={styles.form}>
+      <TextInput
+        style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
+        placeholder="Email"
+        placeholderTextColor={placeholderColor}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType="emailAddress"
+      />
+      <TextInput
+        style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
+        placeholder="Password"
+        placeholderTextColor={placeholderColor}
+        // value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        textContentType="password"
+        autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+      />
+
+      <Pressable
+        style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
+        disabled={!canSubmit || authLoading}
+        onPress={() => void onLogin(email, password)}
+      >
+        {authLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Log In</Text>
+        )}
+      </Pressable>
+
+      <Pressable style={styles.forgotButton}>
+        <Text style={[styles.forgotText, { color: AppColors.primary }]}>Forgot password?</Text>
+      </Pressable>
+    </View>
+  );
+});
+
 export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
@@ -34,14 +108,9 @@ export default function LoginScreen() {
   const borderColor = isDark ? AppColors.border.dark : AppColors.border.light;
   const placeholderColor = isDark ? '#6b7280' : '#9ca3af';
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [storedEmail, setStoredEmail] = useState('');
   const signIn = useAuthStore((state) => state.signIn);
   const authLoading = useAuthStore((state) => state.loading);
-  const authInitialized = useAuthStore((state) => state.initialized);
-  const authUser = useAuthStore((state) => state.user);
-
-  const canSubmit = email.trim().length > 0 && password.length >= 6;
 
   const translateY = useSharedValue(0);
   const mascotScale = useSharedValue(1);
@@ -80,7 +149,7 @@ export default function LoginScreen() {
     const loadStoredEmail = async () => {
       const storedEmail = await AsyncStorage.getItem(LAST_LOGIN_EMAIL_KEY);
       if (mounted && storedEmail) {
-        setEmail(storedEmail);
+        setStoredEmail(storedEmail);
       }
     };
 
@@ -91,7 +160,7 @@ export default function LoginScreen() {
     };
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = async (email: string, password: string) => {
     const result = await signIn(email.trim(), password);
     if (!result.ok) {
       Alert.alert('Login failed', result.error.message);
@@ -100,14 +169,6 @@ export default function LoginScreen() {
 
     await AsyncStorage.setItem(LAST_LOGIN_EMAIL_KEY, email.trim());
   };
-
-  // if (!authInitialized || authUser) {
-  //   return (
-  //     <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
-  //       <ActivityIndicator color={AppColors.primary} />
-  //     </View>
-  //   );
-  // }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -129,45 +190,15 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Form */}
-          <View style={styles.form}>
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
-              placeholder="Email"
-              placeholderTextColor={placeholderColor}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
-              placeholder="Password"
-              placeholderTextColor={placeholderColor}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              textContentType="password"
-            />
-
-            <Pressable
-              style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
-              disabled={!canSubmit || authLoading}
-              onPress={() => void handleLogin()}
-            >
-              {authLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Log In</Text>
-              )}
-            </Pressable>
-
-            <Pressable style={styles.forgotButton}>
-              <Text style={[styles.forgotText, { color: AppColors.primary }]}>Forgot password?</Text>
-            </Pressable>
-          </View>
+          <LoginForm
+            authLoading={authLoading}
+            borderColor={borderColor}
+            colors={colors}
+            initialEmail={storedEmail}
+            inputBg={inputBg}
+            onLogin={handleLogin}
+            placeholderColor={placeholderColor}
+          />
 
           {/* Footer */}
           <View style={styles.footer}>

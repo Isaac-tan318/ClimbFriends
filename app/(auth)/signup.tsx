@@ -151,7 +151,6 @@ export default function SignupScreen() {
               style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
               placeholder="Password"
               placeholderTextColor={placeholderColor}
-              value={password}
               onChangeText={setPassword}
               secureTextEntry
               textContentType="newPassword"
