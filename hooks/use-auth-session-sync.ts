@@ -12,20 +12,7 @@ import {
 
 export function useAuthSessionSync() {
   useEffect(() => {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) {
-      void useAuthStore.getState().initialize();
-      return;
-    }
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event) => {
-      console.log(`Auth Listener Fired: ${event}`);
-
-      if (event === 'SIGNED_OUT') {
-        return;
-      }
-
+    const syncAppState = async () => {
       const authResult = await useAuthStore.getState().initialize();
       if (!authResult.ok || !authResult.data) {
         useSessionStore.getState().resetForSignedOut();
@@ -41,6 +28,25 @@ export function useAuthSessionSync() {
         useSocialStore.getState().initialize(),
         useNotificationStore.getState().initialize(),
       ]);
+    };
+
+    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) {
+      void syncAppState();
+      return;
+    }
+
+    void syncAppState();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event) => {
+      console.log(`Auth Listener Fired: ${event}`);
+
+      if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      await syncAppState();
     });
 
     return () => {

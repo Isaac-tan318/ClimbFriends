@@ -1,14 +1,24 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { hasSupabaseConfig } from '@/lib/supabase';
+import { useAuthStore } from '@/stores';
+
+const requiresAuth = hasSupabaseConfig && FEATURE_FLAGS.useSupabaseAuth;
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const user = useAuthStore((state) => state.user);
   const bg = Colors[colorScheme ?? 'light'].background;
+
+  if (requiresAuth && !user) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Tabs
