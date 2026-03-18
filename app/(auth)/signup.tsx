@@ -49,34 +49,31 @@ export default function SignupScreen() {
     password === confirmPassword;
 
   const translateY = useSharedValue(0);
-  const mascotScale = useSharedValue(1);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
-      const shift = Platform.OS === 'ios' ? e.endCoordinates.height * 0.4 : 50;
+      const keyboardHeight = e.endCoordinates.height;
+      const shift = Math.max(
+        keyboardHeight * (Platform.OS === 'ios' ? 0.48 : 0.38),
+        120,
+      );
       translateY.value = withTiming(-shift, TIMING_CONFIG);
-      mascotScale.value = withTiming(0.5, TIMING_CONFIG);
     });
     const hideSub = Keyboard.addListener(hideEvent, () => {
       translateY.value = withTiming(0, TIMING_CONFIG);
-      mascotScale.value = withTiming(1, TIMING_CONFIG);
     });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [translateY, mascotScale]);
+  }, [translateY]);
 
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-  }));
-
-  const mascotAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: mascotScale.value }],
   }));
 
   const handleSignup = async () => {
@@ -116,9 +113,7 @@ export default function SignupScreen() {
         <Animated.View style={[styles.inner, containerAnimatedStyle]}>
           {/* Mascot + Branding */}
           <View style={styles.brandSection}>
-            <Animated.View style={mascotAnimatedStyle}>
-              <Text style={styles.mascot}>🪨</Text>
-            </Animated.View>
+            <Text style={styles.mascot}>🪨</Text>
             <Text style={[styles.appName, { color: colors.text }]}>Create Account</Text>
             <Text style={[styles.tagline, { color: isDark ? '#888' : '#666' }]}>
               Join the climbing community

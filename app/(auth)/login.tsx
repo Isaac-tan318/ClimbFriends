@@ -72,7 +72,6 @@ const LoginForm = React.memo(function LoginForm({
         style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
         placeholder="Password"
         placeholderTextColor={placeholderColor}
-        // value={password}
         onChangeText={setPassword}
         secureTextEntry
         textContentType="password"
@@ -113,34 +112,31 @@ export default function LoginScreen() {
   const authLoading = useAuthStore((state) => state.loading);
 
   const translateY = useSharedValue(0);
-  const mascotScale = useSharedValue(1);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
-      const shift = Platform.OS === 'ios' ? e.endCoordinates.height * 0.35 : 40;
+      const keyboardHeight = e.endCoordinates.height;
+      const shift = Math.max(
+        keyboardHeight * (Platform.OS === 'ios' ? 0.48 : 0.38),
+        120,
+      );
       translateY.value = withTiming(-shift, TIMING_CONFIG);
-      mascotScale.value = withTiming(0.6, TIMING_CONFIG);
     });
     const hideSub = Keyboard.addListener(hideEvent, () => {
       translateY.value = withTiming(0, TIMING_CONFIG);
-      mascotScale.value = withTiming(1, TIMING_CONFIG);
     });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [translateY, mascotScale]);
+  }, [translateY]);
 
   const containerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-  }));
-
-  const mascotAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: mascotScale.value }],
   }));
 
   useEffect(() => {
@@ -181,9 +177,7 @@ export default function LoginScreen() {
         <Animated.View style={[styles.inner, containerAnimatedStyle]}>
           {/* Mascot + Branding */}
           <View style={styles.brandSection}>
-            <Animated.View style={mascotAnimatedStyle}>
-              <Text style={styles.mascot}>🪨</Text>
-            </Animated.View>
+            <Text style={styles.mascot}>🪨</Text>
             <Text style={[styles.appName, { color: colors.text }]}>ClimbFriends</Text>
             <Text style={[styles.tagline, { color: isDark ? '#888' : '#666' }]}>
               Track climbs. Find friends. Send harder, Together.
