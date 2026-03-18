@@ -12,21 +12,22 @@ import {
 
 export function useAuthSessionSync() {
   useEffect(() => {
-    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) return;
+    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) {
+      void useAuthStore.getState().initialize();
+      return;
+    }
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event) => { // 1. Catch the event!
-      
-      // prevents deadlock!
+    } = supabase.auth.onAuthStateChange(async (event) => {
+      console.log(`Auth Listener Fired: ${event}`);
+
       if (event === 'SIGNED_OUT') {
         return;
       }
 
       const authResult = await useAuthStore.getState().initialize();
-      if (!authResult.ok) return;
-
-      if (!authResult.data) {
+      if (!authResult.ok || !authResult.data) {
         useSessionStore.getState().resetForSignedOut();
         useSettingsStore.getState().resetForSignedOut();
         useSocialStore.getState().resetForSignedOut();

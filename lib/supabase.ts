@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -13,6 +13,7 @@ console.log("Key exists?:", !!supabasePublishableKey);
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabasePublishableKey);
 
 const authStorage = Platform.OS === 'web' ? undefined : AsyncStorage;
+const authLock = Platform.OS === 'web' ? undefined : processLock;
 
 // 🕵️ THE WIRETAP: Intercepts all Supabase network traffic
 const customFetch = async (url: RequestInfo | URL, options?: RequestInit) => {
@@ -34,6 +35,7 @@ export const supabase: SupabaseClient | null = hasSupabaseConfig
         autoRefreshToken: true,
         detectSessionInUrl: false,
         persistSession: true,
+        lock: authLock,
         storage: authStorage,
       },
       global: {

@@ -1,3 +1,5 @@
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
+
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { CURRENT_USER } from '@/data/mock-users';
 import { getSupabaseClient, hasSupabaseConfig, supabase } from '@/lib/supabase';
@@ -35,6 +37,54 @@ const mapSessionUser = (input: {
   avatarUrl: input.avatarUrl ?? undefined,
   createdAt: fromIsoOrNow(input.createdAt),
 });
+
+const resolveAuthenticatedUser = async (authUser: SupabaseAuthUser): Promise<User> => {
+  const fallbackUser = mapSessionUser({
+    id: authUser.id,
+    email: authUser.email,
+    displayName:
+      (authUser.user_metadata?.display_name as string | undefined) ??
+      (authUser.user_metadata?.full_name as string | undefined) ??
+      null,
+    avatarUrl: (authUser.user_metadata?.avatar_url as string | undefined) ?? null,
+    createdAt: authUser.created_at ?? null,
+  });
+
+  try {
+    const client = getSupabaseClient();
+    const { data: profile, error: profileError } = await client
+      .from('profiles')
+      .select('id,email,display_name,avatar_url,created_at')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.warn('Profile lookup failed during auth resolution:', profileError.message);
+      return fallbackUser;
+    }
+
+    if (profile) {
+      return mapProfile(profile as DbProfileRow);
+    }
+
+    const seededProfile = await upsertProfile({
+      id: authUser.id,
+      email: authUser.email ?? undefined,
+      displayName: authUser.user_metadata?.display_name as string | undefined,
+      avatarUrl: (authUser.user_metadata?.avatar_url as string | undefined) ?? null,
+    });
+
+    if (!seededProfile.ok) {
+      console.warn('Profile seed failed during auth resolution:', seededProfile.error.message);
+      return fallbackUser;
+    }
+
+    return seededProfile.data;
+  } catch (unknownError) {
+    console.warn('Unexpected profile resolution failure:', unknownError);
+    return fallbackUser;
+  }
+};
 
 const upsertProfile = async (input: {
   id: string;
@@ -91,44 +141,7 @@ export const authService = {
       return ok(null);
     }
 
-    const fallbackUser = mapSessionUser({
-      id: user.id,
-      email: user.email,
-      displayName:
-        (user.user_metadata?.display_name as string | undefined) ??
-        (user.user_metadata?.full_name as string | undefined) ??
-        null,
-      avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
-      createdAt: user.created_at ?? null,
-    });
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id,email,display_name,avatar_url,created_at')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.warn('Profile lookup failed during session restore:', profileError.message);
-      return ok(fallbackUser);
-    }
-
-    if (profile) {
-      return ok(mapProfile(profile as DbProfileRow));
-    }
-
-    const seededProfile = await upsertProfile({
-      id: user.id,
-      email: user.email,
-      displayName: user.user_metadata?.display_name as string | undefined,
-      avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
-    });
-
-    if (!seededProfile.ok) {
-      console.warn('Profile seed failed during session restore:', seededProfile.error.message);
-      return ok(fallbackUser);
-    }
-    return ok(seededProfile.data);
+    return ok(await resolveAuthenticatedUser(user));
   },
 
   async signUp(params: {
@@ -181,11 +194,8 @@ export const authService = {
       });
     }
 
-    const profileResult = await this.getSessionUser();
-    const user = profileResult.ok && profileResult.data ? profileResult.data : fallbackUser;
-
     return ok({
-      user,
+      user: await resolveAuthenticatedUser(data.user),
       sessionStarted: true,
       requiresEmailConfirmation: false,
     });
@@ -205,12 +215,7 @@ export const authService = {
       return err(error?.message ?? 'Unable to sign in', error?.code, error);
     }
 
-    const profileResult = await this.getSessionUser();
-    if (!profileResult.ok || !profileResult.data) {
-      return err('Signed in but profile lookup failed');
-    }
-
-    return ok(profileResult.data);
+    return ok(await resolveAuthenticatedUser(data.user));
   },
 
   async signOut(options?: { scope?: 'global' | 'local' | 'others' }): Promise<AppResult<void>> {

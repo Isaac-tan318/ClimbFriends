@@ -74,12 +74,6 @@ initialize: async () => {
     }
 
     set({ user: result.data, loading: false, initialized: true, error: null });
-    await Promise.all([
-      useSessionStore.getState().initialize(),
-      useSettingsStore.getState().initialize(),
-      useSocialStore.getState().initialize(),
-      useNotificationStore.getState().initialize(),
-    ]);
     return ok(result.data);
   },
 
@@ -98,12 +92,6 @@ initialize: async () => {
     }
 
     set({ user: result.data.user, loading: false, initialized: true, error: null });
-    await Promise.all([
-      useSessionStore.getState().initialize(),
-      useSettingsStore.getState().initialize(),
-      useSocialStore.getState().initialize(),
-      useNotificationStore.getState().initialize(),
-    ]);
     return ok(result.data);
   },
 
