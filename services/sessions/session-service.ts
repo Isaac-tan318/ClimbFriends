@@ -1,10 +1,11 @@
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { CURRENT_USER_STATS, MOCK_SESSIONS } from '@/data/mock-sessions';
+import { MOCK_SESSIONS } from '@/data/mock-sessions';
 import { getSupabaseClient, hasSupabaseConfig } from '@/lib/supabase';
 import type { ClimbingSession, LoggedClimb, UserStats } from '@/types';
 
 import { fromIso, fromIsoOrNow, toIso } from '@/services/api/date';
 import { err, ok, type AppResult } from '@/services/api/result';
+import { deriveUserStats } from '@/services/sessions/session-stats';
 
 type DbSessionRow = {
   id: string;
@@ -49,34 +50,8 @@ const mapSession = (row: DbSessionRow, climbs: LoggedClimb[]): ClimbingSession =
   climbs,
 });
 
-const computeStats = (sessions: ClimbingSession[], userId: string): UserStats => {
-  const mine = sessions.filter((session) => session.userId === userId && !session.isActive);
-  const totalMinutes = mine.reduce((sum, session) => sum + session.durationMinutes, 0);
-  const totalSessions = mine.length;
-
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - 7);
-  const weekSessions = mine.filter((session) => session.startedAt >= weekStart);
-  const minutesThisWeek = weekSessions.reduce((sum, session) => sum + session.durationMinutes, 0);
-
-  const gymCounts = mine.reduce<Record<string, number>>((acc, session) => {
-    acc[session.gymId] = (acc[session.gymId] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const favoriteGymId = Object.entries(gymCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
-
-  return {
-    totalMinutes,
-    totalSessions,
-    sessionsThisWeek: weekSessions.length,
-    minutesThisWeek,
-    favoriteGymId,
-    currentStreak: CURRENT_USER_STATS.currentStreak,
-    longestStreak: CURRENT_USER_STATS.longestStreak,
-  };
-};
+const computeStats = (sessions: ClimbingSession[], userId: string): UserStats =>
+  deriveUserStats(sessions, userId);
 
 const getMockSessionsForUser = (userId: string): ClimbingSession[] =>
   MOCK_SESSIONS.filter((session) => session.userId === userId).sort(

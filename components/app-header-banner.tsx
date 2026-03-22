@@ -19,10 +19,10 @@ export function AppHeaderBanner({ title }: { title: string }) {
         </ThemedText>
       </View>
 
-      {pathname == '/' && (
+      {pathname === '/' && (
         <View style={styles.streakBadge}>
           <ThemedText style={styles.streakEmoji}>🔥</ThemedText>
-          <ThemedText style={styles.streakText}>{stats.currentStreak}w </ThemedText>
+          <ThemedText style={styles.streakText}>{stats.currentStreak}d</ThemedText>
         </View>
       )}
     </View>

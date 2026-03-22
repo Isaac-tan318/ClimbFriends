@@ -15,6 +15,9 @@ type SyncState = {
   initialized: boolean;
   source: 'mock' | 'supabase';
   error: string | null;
+  friendsError: string | null;
+  plannedVisitsError: string | null;
+  friendRequestsError: string | null;
 };
 
 interface SocialState {
@@ -62,10 +65,23 @@ export const useSocialStore = create<SocialState>((set, get) => ({
     initialized: false,
     source: useMockSocial ? 'mock' : 'supabase',
     error: null,
+    friendsError: null,
+    plannedVisitsError: null,
+    friendRequestsError: null,
   },
 
   initialize: async () => {
-    set((state) => ({ sync: { ...state.sync, loading: true, initialized: true, error: null } }));
+    set((state) => ({
+      sync: {
+        ...state.sync,
+        loading: true,
+        initialized: true,
+        error: null,
+        friendsError: null,
+        plannedVisitsError: null,
+        friendRequestsError: null,
+      },
+    }));
 
     const userId = await resolveUserId();
     if (!userId) {
@@ -83,6 +99,9 @@ export const useSocialStore = create<SocialState>((set, get) => ({
           initialized: true,
           source: 'supabase',
           error: null,
+          friendsError: null,
+          plannedVisitsError: null,
+          friendRequestsError: null,
         },
       });
       return ok(undefined);
@@ -94,57 +113,54 @@ export const useSocialStore = create<SocialState>((set, get) => ({
       socialService.listFriendRequests(userId),
     ]);
 
-    if (!friendsResult.ok || !plansResult.ok || !requestsResult.ok) {
-      const message = !friendsResult.ok
-        ? friendsResult.error.message
-        : plansResult.ok
-          ? (requestsResult.ok ? 'Unknown social sync error' : requestsResult.error.message)
-          : plansResult.error.message;
-
-      set((state) => ({
-        sync: {
-          ...state.sync,
-          loading: false,
-          error: message,
-        },
-      }));
-
-      return err(message);
-    }
+    const previousState = get();
+    const friendsError = friendsResult.ok ? null : friendsResult.error.message;
+    const plannedVisitsError = plansResult.ok ? null : plansResult.error.message;
+    const friendRequestsError = requestsResult.ok ? null : requestsResult.error.message;
+    const syncErrors = [friendsError, plannedVisitsError, friendRequestsError].filter(Boolean) as string[];
 
     set({
-      friends: friendsResult.data,
-      plannedVisits: plansResult.data,
-      friendRequests: requestsResult.data,
+      friends: friendsResult.ok ? friendsResult.data : previousState.friends,
+      plannedVisits: plansResult.ok ? plansResult.data : previousState.plannedVisits,
+      friendRequests: requestsResult.ok ? requestsResult.data : previousState.friendRequests,
       searchResults: [],
       sync: {
         loading: false,
         initialized: true,
         source: useMockSocial ? 'mock' : 'supabase',
-        error: null,
+        error: syncErrors[0] ?? null,
+        friendsError,
+        plannedVisitsError,
+        friendRequestsError,
       },
     });
 
-    if (presenceUnsubscribe) {
-      presenceUnsubscribe();
-      presenceUnsubscribe = null;
+    if (friendsResult.ok) {
+      if (presenceUnsubscribe) {
+        presenceUnsubscribe();
+        presenceUnsubscribe = null;
+      }
+
+      if (!useMockSocial) {
+        presenceUnsubscribe = realtimeService.subscribeToPresence((presence) => {
+          set((state) => ({
+            friends: state.friends.map((friend) =>
+              friend.id === presence.userId
+                ? {
+                    ...friend,
+                    currentGymId: presence.currentGymId,
+                    isAtGym: presence.isAtGym,
+                    lastSeenAt: presence.lastSeenAt,
+                  }
+                : friend,
+            ),
+          }));
+        });
+      }
     }
 
-    if (!useMockSocial) {
-      presenceUnsubscribe = realtimeService.subscribeToPresence((presence) => {
-        set((state) => ({
-          friends: state.friends.map((friend) =>
-            friend.id === presence.userId
-              ? {
-                  ...friend,
-                  currentGymId: presence.currentGymId,
-                  isAtGym: presence.isAtGym,
-                  lastSeenAt: presence.lastSeenAt,
-                }
-              : friend,
-          ),
-        }));
-      });
+    if (syncErrors.length > 0) {
+      return err(syncErrors[0]);
     }
 
     return ok(undefined);
@@ -364,6 +380,9 @@ export const useSocialStore = create<SocialState>((set, get) => ({
         initialized: true,
         source: 'supabase',
         error: null,
+        friendsError: null,
+        plannedVisitsError: null,
+        friendRequestsError: null,
       },
     });
   },

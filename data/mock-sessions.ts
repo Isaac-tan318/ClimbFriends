@@ -1,4 +1,5 @@
 import { ClimbingSession, LeaderboardEntry, UserStats } from '@/types';
+import { deriveUserStats } from '@/services/sessions/session-stats';
 import { MOCK_USERS } from './mock-users';
 
 // Helper to create dates in the past
@@ -139,15 +140,7 @@ export const MOCK_SESSIONS: ClimbingSession[] = [
   },
 ];
 
-export const CURRENT_USER_STATS: UserStats = {
-  totalMinutes: 615, // sum of user-1 sessions
-  totalSessions: 7,
-  sessionsThisWeek: 2,
-  minutesThisWeek: 210,
-  favoriteGymId: 'boulder-plus-aperia',
-  currentStreak: 3,
-  longestStreak: 5,
-};
+export const CURRENT_USER_STATS: UserStats = deriveUserStats(MOCK_SESSIONS, 'user-1');
 
 export const getUserSessions = (userId: string): ClimbingSession[] => {
   return MOCK_SESSIONS.filter((s) => s.userId === userId);

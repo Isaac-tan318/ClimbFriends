@@ -7,6 +7,7 @@ import type { ClimbingSession, LoggedClimb, UserStats } from '@/types';
 import { getCurrentUserId } from '@/services/auth/current-user';
 import { err, ok, type AppResult } from '@/services/api/result';
 import { presenceService } from '@/services/presence/presence-service';
+import { deriveUserStats } from '@/services/sessions/session-stats';
 import { sessionService } from '@/services/sessions/session-service';
 
 type SyncState = {
@@ -51,33 +52,8 @@ const resolveUserId = async (): Promise<string | null> => {
   return useMockSessions ? DEFAULT_USER_ID : null;
 };
 
-const deriveStats = (sessions: ClimbingSession[], userId: string): UserStats => {
-  const mine = sessions.filter((session) => session.userId === userId && !session.isActive);
-  const totalMinutes = mine.reduce((sum, session) => sum + session.durationMinutes, 0);
-
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const sessionsThisWeek = mine.filter((session) => session.startedAt >= sevenDaysAgo);
-  const minutesThisWeek = sessionsThisWeek.reduce((sum, session) => sum + session.durationMinutes, 0);
-
-  const gymCounts = mine.reduce<Record<string, number>>((acc, session) => {
-    acc[session.gymId] = (acc[session.gymId] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const favoriteGymId = Object.entries(gymCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
-
-  return {
-    totalMinutes,
-    totalSessions: mine.length,
-    sessionsThisWeek: sessionsThisWeek.length,
-    minutesThisWeek,
-    favoriteGymId,
-    currentStreak: CURRENT_USER_STATS.currentStreak,
-    longestStreak: CURRENT_USER_STATS.longestStreak,
-  };
-};
+const deriveStats = (sessions: ClimbingSession[], userId: string): UserStats =>
+  deriveUserStats(sessions, userId);
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: useMockSessions ? MOCK_SESSIONS : [],

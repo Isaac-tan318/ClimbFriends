@@ -17,7 +17,8 @@ Apply SQL in order:
 2. `supabase/migrations/202603120001_gym_user_leaderboard.sql`
 3. `supabase/migrations/202603140001_backend_core_completion.sql`
 4. `supabase/migrations/202603150001_rankings_gym_index.sql`
-5. `supabase/seed.sql`
+5. `supabase/migrations/202603150002_planned_visits_policy_recursion_fix.sql`
+6. `supabase/seed.sql`
 
 ## 3) Edge Functions
 Edge functions are in:

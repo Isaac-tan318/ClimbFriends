@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AppColors, Colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores';
 import { Link, useRouter } from 'expo-router';
@@ -36,6 +37,8 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const signUp = useAuthStore((state) => state.signUp);
   const authLoading = useAuthStore((state) => state.loading);
   const authInitialized = useAuthStore((state) => state.initialized);
@@ -142,23 +145,52 @@ export default function SignupScreen() {
               keyboardType="email-address"
               textContentType="emailAddress"
             />
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
-              placeholder="Password"
-              placeholderTextColor={placeholderColor}
-              onChangeText={setPassword}
-              secureTextEntry
-              textContentType="newPassword"
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
-              placeholder="Confirm password"
-              placeholderTextColor={placeholderColor}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              textContentType="newPassword"
-            />
+            <View style={[styles.inputShell, { backgroundColor: inputBg, borderColor }]}>
+              <TextInput
+                style={[styles.passwordInput, { color: colors.text }]}
+                placeholder="Password"
+                placeholderTextColor={placeholderColor}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                textContentType="newPassword"
+              />
+              <Pressable
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                hitSlop={8}
+                onPress={() => setShowPassword((current) => !current)}
+                style={styles.visibilityButton}
+              >
+                <MaterialIcons
+                  name={showPassword ? 'visibility-off' : 'visibility'}
+                  size={22}
+                  color={placeholderColor}
+                />
+              </Pressable>
+            </View>
+            <View style={[styles.inputShell, { backgroundColor: inputBg, borderColor }]}>
+              <TextInput
+                style={[styles.passwordInput, { color: colors.text }]}
+                placeholder="Confirm password"
+                placeholderTextColor={placeholderColor}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                textContentType="newPassword"
+              />
+              <Pressable
+                accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                hitSlop={8}
+                onPress={() => setShowConfirmPassword((current) => !current)}
+                style={styles.visibilityButton}
+              >
+                <MaterialIcons
+                  name={showConfirmPassword ? 'visibility-off' : 'visibility'}
+                  size={22}
+                  color={placeholderColor}
+                />
+              </Pressable>
+            </View>
 
             {password.length > 0 && password.length < 6 && (
               <Text style={styles.hintText}>Password must be at least 6 characters</Text>
@@ -235,6 +267,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 16,
+  },
+  inputShell: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingLeft: 16,
+    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+  },
+  visibilityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hintText: {
     fontSize: 13,

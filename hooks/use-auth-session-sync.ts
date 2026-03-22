@@ -12,6 +12,8 @@ import {
 
 export function useAuthSessionSync() {
   useEffect(() => {
+    let pendingSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const syncAppState = async () => {
       const authResult = await useAuthStore.getState().initialize();
       if (!authResult.ok || !authResult.data) {
@@ -39,17 +41,28 @@ export function useAuthSessionSync() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event) => {
+    } = supabase.auth.onAuthStateChange((event) => {
       console.log(`Auth Listener Fired: ${event}`);
 
       if (event === 'INITIAL_SESSION') {
         return;
       }
 
-      await syncAppState();
+      // Supabase advises against awaiting auth calls inside this callback.
+      if (pendingSyncTimeout) {
+        clearTimeout(pendingSyncTimeout);
+      }
+
+      pendingSyncTimeout = setTimeout(() => {
+        pendingSyncTimeout = null;
+        void syncAppState();
+      }, 0);
     });
 
     return () => {
+      if (pendingSyncTimeout) {
+        clearTimeout(pendingSyncTimeout);
+      }
       subscription.unsubscribe();
     };
   }, []);

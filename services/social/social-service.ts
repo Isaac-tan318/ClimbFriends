@@ -90,6 +90,25 @@ const mapUser = (profile: DbProfile): User => ({
 const buildUserMap = (profiles: DbProfile[]): Map<string, User> =>
   new Map(profiles.map((profile) => [profile.id, mapUser(profile)]));
 
+const PLANNED_VISITS_POLICY_RECURSION_PATTERN =
+  'infinite recursion detected in policy for relation "planned_visits"';
+
+const mapPlannedVisitsError = (
+  message?: string,
+  code?: string,
+  details?: unknown,
+) => {
+  if (message?.includes(PLANNED_VISITS_POLICY_RECURSION_PATTERN)) {
+    return err(
+      'Planned visits are temporarily unavailable until the planned_visits RLS recursion fix migration is applied.',
+      'PLANNED_VISITS_POLICY_RECURSION',
+      details,
+    );
+  }
+
+  return err(message ?? 'Unable to load planned visits', code, details);
+};
+
 const notifySocialEvent = async (input: {
   targetUserId: string;
   type: 'friend_request' | 'friend_request_accepted' | 'plan_invite' | 'plan_response';
@@ -464,7 +483,7 @@ export const socialService = {
         .order('planned_date', { ascending: true });
 
       if (ownedError) {
-        return err(ownedError.message, ownedError.code, ownedError);
+        return mapPlannedVisitsError(ownedError.message, ownedError.code, ownedError);
       }
 
       const { data: invites, error: inviteError } = await client
@@ -488,7 +507,11 @@ export const socialService = {
           .in('id', invitedPlanIds);
 
         if (invitedError) {
-          return err(invitedError.message, invitedError.code, invitedError);
+          return mapPlannedVisitsError(
+            invitedError.message,
+            invitedError.code,
+            invitedError,
+          );
         }
 
         invitedPlans = (invitedData ?? []) as DbPlannedVisit[];
@@ -528,6 +551,13 @@ export const socialService = {
 
       return ok(mapped);
     } catch (unknownError) {
+      if (
+        unknownError instanceof Error &&
+        unknownError.message.includes(PLANNED_VISITS_POLICY_RECURSION_PATTERN)
+      ) {
+        return mapPlannedVisitsError(unknownError.message, 'PLANNED_VISITS_POLICY_RECURSION', unknownError);
+      }
+
       return err('Unexpected planned visits fetch error', 'UNEXPECTED', unknownError);
     }
   },

@@ -16,6 +16,8 @@ type DbProfileRow = {
   created_at: string | null;
 };
 
+type SignOutScope = 'global' | 'local' | 'others';
+
 const mapProfile = (row: DbProfileRow): User => ({
   id: row.id,
   email: row.email ?? '',
@@ -218,24 +220,26 @@ export const authService = {
     return ok(await resolveAuthenticatedUser(data.user));
   },
 
-  async signOut(options?: { scope?: 'global' | 'local' | 'others' }): Promise<AppResult<void>> {
+  async signOut(options?: { scope?: SignOutScope }): Promise<AppResult<void>> {
     if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth || !supabase) {
       return ok(undefined);
     }
 
-    console.log(`\n🚪 Initiating Supabase signOut with scope:`, options?.scope || 'global');
+    const scope = options?.scope ?? 'local';
+
+    console.log('\nLogging out of Supabase with scope:', scope);
     try {
-      const { error } = await supabase.auth.signOut(options);
+      const { error } = await supabase.auth.signOut({ scope });
 
       if (error) {
-        console.error("🚪 Supabase returned an error during signOut:", error);
+        console.error('Supabase returned an error during signOut:', error);
         return err(error.message, error.code, error);
       }
 
-      console.log("🚪 Supabase signOut promise resolved successfully!");
+      console.log('Supabase signOut promise resolved successfully.');
       return ok(undefined);
     } catch (e) {
-      console.error("🚪 FATAL: Supabase signOut threw a raw exception:", e);
+      console.error('Supabase signOut threw a raw exception:', e);
       return err('Unexpected error during sign out', 'FATAL', e);
     }
   },

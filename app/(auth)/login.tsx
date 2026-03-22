@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AppColors, Colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -47,6 +48,7 @@ const LoginForm = React.memo(function LoginForm({
 }: LoginFormProps) {
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const canSubmit = email.trim().length > 0 && password.length >= 6;
 
   useEffect(() => {
@@ -68,17 +70,32 @@ const LoginForm = React.memo(function LoginForm({
         keyboardType="email-address"
         textContentType="emailAddress"
       />
-      <TextInput
-        style={[styles.input, { backgroundColor: inputBg, color: colors.text, borderColor }]}
-        placeholder="Password"
-        placeholderTextColor={placeholderColor}
-        onChangeText={setPassword}
-        secureTextEntry
-        textContentType="password"
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-      />
+      <View style={[styles.inputShell, { backgroundColor: inputBg, borderColor }]}>
+        <TextInput
+          style={[styles.passwordInput, { color: colors.text }]}
+          placeholder="Password"
+          placeholderTextColor={placeholderColor}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          textContentType="password"
+          autoCapitalize="none"
+          autoCorrect={false}
+          spellCheck={false}
+        />
+        <Pressable
+          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+          hitSlop={8}
+          onPress={() => setShowPassword((current) => !current)}
+          style={styles.visibilityButton}
+        >
+          <MaterialIcons
+            name={showPassword ? 'visibility-off' : 'visibility'}
+            size={22}
+            color={placeholderColor}
+          />
+        </Pressable>
+      </View>
 
       <Pressable
         style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
@@ -249,6 +266,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 16,
+  },
+  inputShell: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingLeft: 16,
+    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+  },
+  visibilityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryButton: {
     height: 50,

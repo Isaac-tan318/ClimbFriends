@@ -1132,7 +1132,11 @@ export default function HomeScreen() {
 
                 {!currentRankLoading && !currentRankError && (
                   <>
-                    <AnimatedPodium entries={rankEntries} currentUserId={viewerUserId ?? ''} />
+                    <AnimatedPodium
+                      entries={rankEntries}
+                      currentUserId={viewerUserId ?? ''}
+                      shouldAnimate={shouldAnimateRankings}
+                    />
 
                     {rankEntries.length > 0 && (
                       <View style={styles.lbStatsRow}>

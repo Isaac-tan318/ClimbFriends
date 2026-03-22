@@ -11,7 +11,9 @@ import {
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,10 +32,12 @@ import Reanimated, {
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { FEATURE_FLAGS } from "@/constants/feature-flags";
 import { AppColors, Colors } from "@/constants/theme";
 import { CURRENT_USER, getGymById } from "@/data";
 import { useThemeColor } from "@/hooks/use-theme-color";
-import { useSessionStore, useSocialStore } from "@/stores";
+import { hasSupabaseConfig } from "@/lib/supabase";
+import { useAuthStore, useSessionStore, useSocialStore } from "@/stores";
 import { ClimbingSession } from "@/types";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -649,6 +653,11 @@ const actStyles = StyleSheet.create({
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type ProfileTab = "insights" | "activities" | "progression";
+const PROFILE_TABS: ProfileTab[] = ["insights", "activities", "progression"];
+const PROFILE_TAB_SWIPE_TIMING = {
+  duration: 250,
+  easing: Easing.out(Easing.cubic),
+};
 
 // ─── Main Screen ────────────────────────────────────────────────────────────
 
@@ -656,13 +665,35 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
 
+  const authUser = useAuthStore((state) => state.user);
+  const initializeAuth = useAuthStore((state) => state.initialize);
   const stats = useSessionStore((state) => state.stats);
   const allSessions = useSessionStore((state) => state.sessions);
+  const refreshSessions = useSessionStore((state) => state.refreshSessions);
+  const sessionSync = useSessionStore((state) => state.sync);
   const friends = useSocialStore((state) => state.friends);
+  const initializeSocial = useSocialStore((state) => state.initialize);
+  const socialSync = useSocialStore((state) => state.sync);
 
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const colors = Colors[colorScheme];
+  const useMockAuthUser = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth;
+  const profileUser = authUser ?? (useMockAuthUser ? CURRENT_USER : null);
+  const profileName = profileUser?.displayName?.trim() || "Climber";
+  const profileInitial = profileName.charAt(0).toUpperCase() || "?";
+  const profileHandle = useMemo(() => {
+    const emailHandle = profileUser?.email?.split("@")[0]?.trim();
+    if (emailHandle) {
+      return `@${emailHandle}`;
+    }
+
+    const displayHandle = profileName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    return displayHandle ? `@${displayHandle}` : "@climber";
+  }, [profileName, profileUser?.email]);
+  const syncError = sessionSync.error ?? socialSync.friendsError;
   const cardBg = useThemeColor(
     { light: "#fff", dark: "#1c1c1e" },
     "background",
@@ -677,10 +708,9 @@ export default function ProfileScreen() {
   );
 
   const [profileTab, setProfileTab] = useState<ProfileTab>("insights");
-  const PROFILE_TABS: ProfileTab[] = ["insights", "activities", "progression"];
+  const [refreshing, setRefreshing] = useState(false);
   const profileTabIndex = useSharedValue(0);
   const profileTabOffset = useSharedValue(0);
-  const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
 
   const changeProfileTab = useCallback((index: number) => {
     setProfileTab(PROFILE_TABS[index]);
@@ -711,7 +741,7 @@ export default function ProfileScreen() {
           profileTabIndex.value = target;
           profileTabOffset.value = withTiming(
             -target * screenWidth,
-            SWIPE_TIMING,
+            PROFILE_TAB_SWIPE_TIMING,
           );
           runOnJS(changeProfileTab)(target);
         }),
@@ -726,7 +756,10 @@ export default function ProfileScreen() {
     (tab: ProfileTab) => {
       const index = PROFILE_TABS.indexOf(tab);
       profileTabIndex.value = index;
-      profileTabOffset.value = withTiming(-index * screenWidth, SWIPE_TIMING);
+      profileTabOffset.value = withTiming(
+        -index * screenWidth,
+        PROFILE_TAB_SWIPE_TIMING,
+      );
       setProfileTab(tab);
     },
     [profileTabIndex, profileTabOffset, screenWidth],
@@ -736,12 +769,23 @@ export default function ProfileScreen() {
     profileTabOffset.value = -PROFILE_TABS.indexOf(profileTab) * screenWidth;
   }, [profileTab, profileTabOffset, screenWidth]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    const authResult = await initializeAuth();
+    if (authResult.ok && authResult.data) {
+      await Promise.all([refreshSessions(), initializeSocial()]);
+    }
+
+    setRefreshing(false);
+  }, [initializeAuth, initializeSocial, refreshSessions]);
+
   const mySessions = useMemo(
     () =>
       allSessions
-        .filter((s) => s.userId === "user-1")
+        .filter((s) => (profileUser ? s.userId === profileUser.id : false))
         .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()),
-    [allSessions],
+    [allSessions, profileUser],
   );
 
   const totalHours = Math.round((stats.totalMinutes / 60) * 10) / 10;
@@ -772,7 +816,17 @@ export default function ProfileScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView style={styles.scrollView} bounces={false}>
+      <ScrollView
+        style={styles.scrollView}
+        bounces={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={AppColors.primary}
+          />
+        }
+      >
         <View style={styles.banner}>
           <View style={styles.bannerTopRow}>
             <Pressable style={styles.bannerIcon}>
@@ -798,11 +852,16 @@ export default function ProfileScreen() {
             <View
               style={[styles.profilePic, { borderColor: colors.background }]}
             >
-              <View style={styles.profilePicInner}>
-                <Text style={styles.profilePicText}>
-                  {CURRENT_USER.displayName[0]}
-                </Text>
-              </View>
+              {profileUser?.avatarUrl ? (
+                <Image
+                  source={{ uri: profileUser.avatarUrl }}
+                  style={styles.profilePicImage}
+                />
+              ) : (
+                <View style={styles.profilePicInner}>
+                  <Text style={styles.profilePicText}>{profileInitial}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.badgesRow}>
               {unlockedAchievements.slice(0, 5).map((ach) => (
@@ -817,18 +876,28 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.nameRow}>
-            <ThemedText style={styles.profileName}>
-              {CURRENT_USER.displayName}
-            </ThemedText>
+            <ThemedText style={styles.profileName}>{profileName}</ThemedText>
             <View style={styles.levelCircle}>
               <Text style={styles.levelCircleText}>{levelInfo.level}</Text>
             </View>
           </View>
 
           <ThemedText style={styles.profileMeta}>
-            @{CURRENT_USER.email.split("@")[0]} •{" "}
-            <Text style={styles.friendCount}>{friends.length}</Text> friends
+            {profileHandle} • <Text style={styles.friendCount}>{friends.length}</Text>{" "}
+            friends
           </ThemedText>
+
+          {(sessionSync.loading || socialSync.loading || syncError) && (
+            <View
+              style={[styles.profileStatusCard, { backgroundColor: surfaceBg }]}
+            >
+              <ThemedText style={styles.profileStatusText}>
+                {syncError
+                  ? `Some profile data could not be refreshed: ${syncError}`
+                  : "Syncing profile from backend..."}
+              </ThemedText>
+            </View>
+          )}
 
           <View style={styles.statsGrid}>
             <View style={[styles.statCell, { backgroundColor: surfaceBg }]}>
@@ -1282,6 +1351,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  profilePicImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
   profilePicText: { color: "white", fontSize: 26, fontWeight: "bold" },
   badgesRow: {
     flexDirection: "row",
@@ -1317,6 +1391,17 @@ const styles = StyleSheet.create({
   levelCircleText: { color: "white", fontSize: 16, fontWeight: "bold" },
   profileMeta: { fontSize: 14, opacity: 0.6, marginBottom: 20 },
   friendCount: { fontWeight: "700" },
+  profileStatusCard: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  profileStatusText: {
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.75,
+  },
 
   statsGrid: {
     flexDirection: "row",
