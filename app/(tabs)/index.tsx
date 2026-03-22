@@ -1,14 +1,33 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, useColorScheme, Text, Alert, Switch, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet,
+  ScrollView,
+  View,
+  Pressable,
+  FlatList,
+  Image,
+  TextInput,
+  useColorScheme,
+  Text,
+  Alert,
+  Switch,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Reanimated, {
+  runOnJS,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
 import { AppColors, Colors } from '@/constants/theme';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { Device } from '@/constants/device';
 
 import { AppHeaderBanner } from '@/components/app-header-banner';
 import { ActiveSessionCard } from '@/components/home/active-session-card';
@@ -126,7 +145,9 @@ function SessionSummaryCard({
           <ThemedText style={styles.summaryMetricLabel} numberOfLines={1}>
             Climb this week
           </ThemedText>
-          <ThemedText style={styles.summaryMetricValue}>{formatOrdinal(sessionsThisWeek)}</ThemedText>
+          <ThemedText style={styles.summaryMetricValue}>
+            {formatOrdinal(sessionsThisWeek)}
+          </ThemedText>
         </View>
         <View style={styles.summaryMetric}>
           <ThemedText style={styles.summaryMetricLabel}>Climbs logged</ThemedText>
@@ -194,7 +215,9 @@ function GymPickerModal({
             </Pressable>
             <GestureDetector gesture={dragGesture}>
               <View style={styles.modalHeaderTitleDragZone}>
-                <ThemedText type="subtitle" style={styles.modalHeaderTitle}>Select Gym</ThemedText>
+                <ThemedText type="subtitle" style={styles.modalHeaderTitle}>
+                  Select Gym
+                </ThemedText>
               </View>
             </GestureDetector>
             <View style={styles.backButtonSpacer} />
@@ -220,7 +243,15 @@ function GymPickerModal({
   );
 }
 
-function UpcomingPlanCard({ gymName, date, inviteeCount }: { gymName: string; date: Date; inviteeCount: number }) {
+function UpcomingPlanCard({
+  gymName,
+  date,
+  inviteeCount,
+}: {
+  gymName: string;
+  date: Date;
+  inviteeCount: number;
+}) {
   const cardBg = useThemeColor({ light: '#f9fafb', dark: '#1a1a1a' }, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
 
@@ -303,9 +334,23 @@ function FriendPickerModal({
 
   const timeSlots = useMemo(
     () => [
-      '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
-      '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
-      '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM',
+      '6:00 AM',
+      '7:00 AM',
+      '8:00 AM',
+      '9:00 AM',
+      '10:00 AM',
+      '11:00 AM',
+      '12:00 PM',
+      '1:00 PM',
+      '2:00 PM',
+      '3:00 PM',
+      '4:00 PM',
+      '5:00 PM',
+      '6:00 PM',
+      '7:00 PM',
+      '8:00 PM',
+      '9:00 PM',
+      '10:00 PM',
     ],
     [],
   );
@@ -321,7 +366,6 @@ function FriendPickerModal({
     >
       {({ dismiss, onBodyScroll }) => (
         <>
-          {/* Search bar */}
           <View style={styles.friendPickerSearchRow}>
             <Pressable onPress={() => dismiss()} style={styles.backButton}>
               <ThemedText style={styles.backButtonText}>‹</ThemedText>
@@ -337,7 +381,6 @@ function FriendPickerModal({
             </View>
           </View>
 
-          {/* Friend Grid */}
           <FlatList
             data={filteredFriends}
             keyExtractor={(item) => item.id}
@@ -347,29 +390,44 @@ function FriendPickerModal({
             scrollEventThrottle={16}
             ListFooterComponent={
               <>
-                {/* Date/Time picker for Plan mode */}
                 {mode === 'make-plan' && (
                   <View style={styles.dateTimeSection}>
                     <ThemedText style={styles.dateTimeSectionLabel}>Pick a date</ThemedText>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.dateScroll}
+                    >
                       {dateOptions.map((d, i) => {
                         const isToday = i === 0;
-                        const isDateSelected = planDate !== null && d.toDateString() === planDate.toDateString();
+                        const isDateSelected =
+                          planDate !== null && d.toDateString() === planDate.toDateString();
                         return (
                           <Pressable
                             key={i}
                             style={[styles.dateChip, isDateSelected && styles.dateChipSelected]}
                             onPress={() => setPlanDate(d)}
                           >
-                            <ThemedText style={[styles.dateChipText, isDateSelected && styles.dateChipTextSelected]}>
+                            <ThemedText
+                              style={[
+                                styles.dateChipText,
+                                isDateSelected && styles.dateChipTextSelected,
+                              ]}
+                            >
                               {isToday ? 'Today' : format(d, 'EEE, MMM d')}
                             </ThemedText>
                           </Pressable>
                         );
                       })}
                     </ScrollView>
-                    <ThemedText style={[styles.dateTimeSectionLabel, { marginTop: 12 }]}>Pick a time</ThemedText>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+                    <ThemedText style={[styles.dateTimeSectionLabel, { marginTop: 12 }]}>
+                      Pick a time
+                    </ThemedText>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.timeScroll}
+                    >
                       {timeSlots.map((t) => {
                         const isTimeSelected = planTime === t;
                         return (
@@ -378,7 +436,12 @@ function FriendPickerModal({
                             style={[styles.timeChip, isTimeSelected && styles.timeChipSelected]}
                             onPress={() => setPlanTime(t)}
                           >
-                            <ThemedText style={[styles.timeChipText, isTimeSelected && styles.timeChipTextSelected]}>
+                            <ThemedText
+                              style={[
+                                styles.timeChipText,
+                                isTimeSelected && styles.timeChipTextSelected,
+                              ]}
+                            >
                               {t}
                             </ThemedText>
                           </Pressable>
@@ -399,13 +462,16 @@ function FriendPickerModal({
                     ) : (
                       <View style={styles.friendGridAvatarFallback}>
                         <ThemedText style={styles.friendGridAvatarText}>
-                          {item.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                          {item.displayName
+                            .split(' ')
+                            .map((w) => w[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()}
                         </ThemedText>
                       </View>
                     )}
-                    {item.isAtGym && !isSelected && (
-                      <View style={styles.friendGridOnlineDot} />
-                    )}
+                    {item.isAtGym && !isSelected && <View style={styles.friendGridOnlineDot} />}
                     {isSelected && (
                       <View style={styles.friendGridCheck}>
                         <ThemedText style={styles.friendGridCheckText}>✓</ThemedText>
@@ -420,7 +486,6 @@ function FriendPickerModal({
             }}
           />
 
-          {/* Message input */}
           <View style={[styles.messageInputRow, { borderColor }]}>
             <TextInput
               style={[styles.messageInput, { color: textColor }]}
@@ -431,7 +496,6 @@ function FriendPickerModal({
             />
           </View>
 
-          {/* Send button */}
           <Pressable
             style={[styles.sendButton, selectedIds.size === 0 && { opacity: 0.5 }]}
             onPress={() => dismiss()}
@@ -445,9 +509,16 @@ function FriendPickerModal({
   );
 }
 
-function InviteBoxes({ onInviteNow, onMakePlan }: { onInviteNow: () => void; onMakePlan: () => void }) {
+function InviteBoxes({
+  onInviteNow,
+  onMakePlan,
+}: {
+  onInviteNow: () => void;
+  onMakePlan: () => void;
+}) {
   const scheme = useColorScheme();
-  const surfaceBg = scheme === 'dark' ? AppColors.surfaceContainer.dark : AppColors.surfaceContainer.light;
+  const surfaceBg =
+    scheme === 'dark' ? AppColors.surfaceContainer.dark : AppColors.surfaceContainer.light;
 
   return (
     <View style={styles.inviteButtonsRow}>
@@ -479,6 +550,8 @@ function RankStatHighlight({ label, value }: { label: string; value: string }) {
 }
 
 export default function HomeScreen() {
+  const { width: screenWidth } = useWindowDimensions();
+
   const searchParams = useLocalSearchParams<{ homeTab?: string }>();
   const isScreenFocused = useIsFocused();
   const authUser = useAuthStore((state) => state.user);
@@ -505,38 +578,44 @@ export default function HomeScreen() {
 
   const changeHomeTab = useCallback((index: number) => {
     setHomeTab(HOME_TABS[index]);
-  }, [setHomeTab]);
+  }, []);
 
-  const homeTabSwipe = useMemo(() =>
-    Gesture.Pan()
-      .activeOffsetX([-15, 15])
-      .failOffsetY([-10, 10])
-      .onUpdate((e) => {
-        tabOffset.value = -tabIndex.value * Device.SCREEN_WIDTH + e.translationX;
-      })
-      .onEnd((e) => {
-        let target = tabIndex.value;
-        if ((e.translationX < -150 || e.velocityX < -500) && target < HOME_TABS.length - 1) {
-          target++;
-        } else if ((e.translationX > 150 || e.velocityX > 500) && target > 0) {
-          target--;
-        }
-        tabIndex.value = target;
-        tabOffset.value = withTiming(-target * Device.SCREEN_WIDTH, SWIPE_TIMING);
-        runOnJS(changeHomeTab)(target);
-      }),
-  [changeHomeTab, tabIndex, tabOffset]);
+  const homeTabSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-15, 15])
+        .failOffsetY([-10, 10])
+        .onUpdate((e) => {
+          tabOffset.value = -tabIndex.value * screenWidth + e.translationX;
+        })
+        .onEnd((e) => {
+          let target = tabIndex.value;
+          if ((e.translationX < -150 || e.velocityX < -500) && target < HOME_TABS.length - 1) {
+            target++;
+          } else if ((e.translationX > 150 || e.velocityX > 500) && target > 0) {
+            target--;
+          }
+          tabIndex.value = target;
+          tabOffset.value = withTiming(-target * screenWidth, SWIPE_TIMING);
+          runOnJS(changeHomeTab)(target);
+        }),
+    [changeHomeTab, screenWidth, tabIndex, tabOffset],
+  );
 
   const animatedTabStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabOffset.value }],
   }));
 
-  const handleTabPress = useCallback((tab: HomeTab) => {
-    const index = HOME_TABS.indexOf(tab);
-    tabIndex.value = index;
-    tabOffset.value = withTiming(-index * Device.SCREEN_WIDTH, SWIPE_TIMING);
-    setHomeTab(tab);
-  }, [tabIndex, tabOffset]);
+  const handleTabPress = useCallback(
+    (tab: HomeTab) => {
+      const index = HOME_TABS.indexOf(tab);
+      tabIndex.value = index;
+      tabOffset.value = withTiming(-index * screenWidth, SWIPE_TIMING);
+      setHomeTab(tab);
+    },
+    [screenWidth, tabIndex, tabOffset],
+  );
+
   const {
     category: rankCategory,
     setCategory: setRankCategory,
@@ -549,6 +628,7 @@ export default function HomeScreen() {
     errorByCategory,
     refreshCategory,
   } = useRankings(activeSession?.gymId ?? SINGAPORE_GYMS[0]?.id ?? '');
+
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
   const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
@@ -559,7 +639,6 @@ export default function HomeScreen() {
   const [logClimbSessionId, setLogClimbSessionId] = useState<string | null>(null);
   const [logClimbGymId, setLogClimbGymId] = useState<string | null>(null);
 
-  // Publish session state
   const [publishModalVisible, setPublishModalVisible] = useState(false);
   const [publishDescription, setPublishDescription] = useState('');
   const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
@@ -591,8 +670,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (previousActiveSessionRef.current && !activeSession) {
       const endedSession = allSessions.find(
-        (session) =>
-          session.id === previousActiveSessionRef.current?.id && !session.isActive,
+        (session) => session.id === previousActiveSessionRef.current?.id && !session.isActive,
       );
 
       if (endedSession) {
@@ -637,12 +715,10 @@ export default function HomeScreen() {
 
   const handleEndSession = useCallback(() => {
     if (activeSession) {
-      // Set the summary session immediately to prevent flashing
       const endedSession = { ...activeSession, isActive: false, endedAt: new Date() };
       setLastEndedSession(endedSession);
     }
     endSession();
-    // Reset publish state for the new ended session
     setHasPublished(false);
     setPublishDescription('');
     setPublishClimbedWith(false);
@@ -657,7 +733,6 @@ export default function HomeScreen() {
   const handleLogClimbSubmit = useCallback(
     (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => {
       logClimb(climb);
-      // Update the lastEndedSession if logging for it
       if (lastEndedSession && climb.sessionId === lastEndedSession.id) {
         setLastEndedSession((prev) =>
           prev
@@ -699,35 +774,40 @@ export default function HomeScreen() {
     }
   }, [lastEndedSession]);
 
-  const handlePublishSubmit = useCallback((dismiss: BottomSheetDismiss) => {
-    const publish = async () => {
-      if (lastEndedSession) {
-        const publishResult = await feedService.publishSession({
-          userId: authUser?.id ?? CURRENT_USER.id,
-          sessionId: lastEndedSession.id,
-          gymId: lastEndedSession.gymId,
-          sessionDurationMinutes: lastEndedSession.durationMinutes,
-          climbCount: lastEndedSession.climbs?.length ?? 0,
-          description: publishDescription,
-          climbedWithUserIds: publishClimbedWith ? friends.slice(0, 3).map((friend) => friend.id) : [],
-        });
+  const handlePublishSubmit = useCallback(
+    (dismiss: BottomSheetDismiss) => {
+      const publish = async () => {
+        if (lastEndedSession) {
+          const publishResult = await feedService.publishSession({
+            userId: authUser?.id ?? CURRENT_USER.id,
+            sessionId: lastEndedSession.id,
+            gymId: lastEndedSession.gymId,
+            sessionDurationMinutes: lastEndedSession.durationMinutes,
+            climbCount: lastEndedSession.climbs?.length ?? 0,
+            description: publishDescription,
+            climbedWithUserIds: publishClimbedWith
+              ? friends.slice(0, 3).map((friend) => friend.id)
+              : [],
+          });
 
-        if (!publishResult.ok) {
-          Alert.alert('Publish failed', publishResult.error.message);
-          return;
+          if (!publishResult.ok) {
+            Alert.alert('Publish failed', publishResult.error.message);
+            return;
+          }
+
+          setAllFeedPosts((prev) => [publishResult.data, ...prev]);
         }
 
-        setAllFeedPosts((prev) => [publishResult.data, ...prev]);
-      }
+        setHasPublished(true);
+        dismiss(() => {
+          Alert.alert('Published!', 'Your session has been shared to the feed.');
+        });
+      };
 
-      setHasPublished(true);
-      dismiss(() => {
-        Alert.alert('Published!', 'Your session has been shared to the feed.');
-      });
-    };
-
-    void publish();
-  }, [lastEndedSession, authUser?.id, publishDescription, publishClimbedWith, friends]);
+      void publish();
+    },
+    [lastEndedSession, authUser?.id, publishDescription, publishClimbedWith, friends],
+  );
 
   const handleFriendPickerClose = useCallback(() => {
     setFriendPickerVisible(false);
@@ -736,9 +816,10 @@ export default function HomeScreen() {
   }, []);
 
   const inviteGymName = inviteGymId ? getGymById(inviteGymId)?.name || 'the gym' : 'the gym';
-  const inviteDefaultMessage = inviteFlow === 'invite-now'
-    ? `Come climb with me at ${inviteGymName} right now!`
-    : `Come climb with me at ${inviteGymName}`;
+  const inviteDefaultMessage =
+    inviteFlow === 'invite-now'
+      ? `Come climb with me at ${inviteGymName} right now!`
+      : `Come climb with me at ${inviteGymName}`;
 
   const [allFeedPosts, setAllFeedPosts] = useState<BetaPost[]>(() => getAllRecentBetaPosts(100));
 
@@ -764,7 +845,6 @@ export default function HomeScreen() {
     [allFeedPosts],
   );
 
-  // Build a lookup of sends grouped by userId + gymId
   const sendsLookup = useMemo(() => {
     const map = new Map<string, BetaPost[]>();
     for (const p of allFeedPosts) {
@@ -813,11 +893,13 @@ export default function HomeScreen() {
     [expandedPosts, sendsLookup, colors.text, mutedText, cardBorder, surfaceBg, togglePostExpanded],
   );
 
-  const rankEntries = rankCategory === 'friends'
-    ? friendsLeaderboard
-    : rankCategory === 'gym'
-      ? gymUsersLeaderboard
-      : nationalLeaderboard;
+  const rankEntries =
+    rankCategory === 'friends'
+      ? friendsLeaderboard
+      : rankCategory === 'gym'
+        ? gymUsersLeaderboard
+        : nationalLeaderboard;
+
   const currentRankLoading = loadingByCategory[rankCategory];
   const currentRankError = errorByCategory[rankCategory];
   const podiumEntryCount = Math.min(rankEntries.length, 3);
@@ -832,21 +914,19 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <AppHeaderBanner title="Home" />
 
-      {/* Top Tab Switcher */}
       <View style={styles.topTabRow}>
         {(['tracker', 'feed', 'ranks'] as HomeTab[]).map((tab) => (
           <Pressable
             key={tab}
-            style={[
-              styles.topTabButton,
-              homeTab === tab && styles.topTabButtonActive,
-            ]}
+            style={[styles.topTabButton, homeTab === tab && styles.topTabButtonActive]}
             onPress={() => handleTabPress(tab)}
           >
             <Text
               style={[
                 styles.topTabLabel,
-                { color: homeTab === tab ? AppColors.primary : (isDark ? '#888' : '#999') },
+                {
+                  color: homeTab === tab ? AppColors.primary : isDark ? '#888' : '#999',
+                },
               ]}
             >
               {tab === 'tracker' ? 'Tracker' : tab === 'feed' ? 'Feed' : 'Ranks'}
@@ -856,255 +936,266 @@ export default function HomeScreen() {
       </View>
 
       <GestureDetector gesture={homeTabSwipe}>
-      <View style={{flex: 1, overflow: 'hidden'}}>
-      <Reanimated.View style={[{flexDirection: 'row', width: Device.SCREEN_WIDTH * 3, height: '100%'}, animatedTabStyle]}>
-      <View style={{width: Device.SCREEN_WIDTH}}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Current Session */}
-        <View style={styles.section}>
-          {activeSession ? (
-            <ActiveSessionCard
-              gymName={activeGym?.name || 'Unknown Gym'}
-              elapsed={elapsed}
-              onEnd={handleEndSession}
-              onLogClimb={() => handleLogClimbOpen(activeSession.id, activeSession.gymId)}
-              session={activeSession}
-            />
-          ) : lastEndedSession ? (
-            <>
-              <SessionSummaryCard
-                session={lastEndedSession}
-                sessionsThisWeek={stats.sessionsThisWeek}
-                climbedWith={friends.slice(0, 3)}
-              />
-              <View style={styles.summaryActionsRow}>
-                <Pressable
-                  style={styles.summaryLogClimbButton}
-                  onPress={() => handleLogClimbOpen(lastEndedSession.id, lastEndedSession.gymId)}
-                >
-                  <ThemedText style={styles.summaryLogClimbButtonText}>Log Climb</ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[styles.publishButton, hasPublished && styles.publishButtonDone]}
-                  onPress={hasPublished ? undefined : handleOpenPublish}
-                >
-                  <ThemedText style={styles.publishButtonText}>
-                    {hasPublished ? '✓ Published' : 'Publish'}
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[styles.newSessionButton, sessionSyncLoading && styles.newSessionButtonLoading]}
-                  onPress={handleStartSession}
-                  disabled={sessionSyncLoading}
-                >
-                  {sessionSyncLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
-                  )}
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <IdleSessionCard onStart={handleStartSession} loading={sessionSyncLoading} />
-          )}
-        </View>
-
-        <View style={styles.sectionDivider} />
-
-        {/* Invite Friends */}
-        <View style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Invite Friends to Climb
-          </ThemedText>
-          <InviteBoxes onInviteNow={handleInviteNow} onMakePlan={handleMakePlan} />
-
-          {/* Upcoming Plans */}
-          {upcomingPlans.length > 0 && (
-            <View style={styles.upcomingPlansContainer}>
-              <ThemedText style={styles.upcomingPlansLabel}>Upcoming Plans</ThemedText>
-              {upcomingPlans.map((plan) => {
-                const gym = getGymById(plan.gymId);
-                return (
-                  <UpcomingPlanCard
-                    key={plan.id}
-                    gymName={gym?.name || 'Unknown Gym'}
-                    date={plan.plannedDate}
-                    inviteeCount={plan.invitees.length}
-                  />
-                );
-              })}
-            </View>
-          )}
-        </View>
-        </ScrollView>
-      </View>
-
-      <View style={{width: Device.SCREEN_WIDTH}}>
-        <FlatList
-          data={recentPosts}
-          keyExtractor={(p) => p.id}
-          renderItem={renderFeedPostItem}
-          contentContainerStyle={styles.feedListContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.feedEmptyState}>
-              <ThemedText style={styles.feedEmptyEmoji}>🧗</ThemedText>
-              <ThemedText style={styles.feedEmptyText}>No posts yet</ThemedText>
-              <ThemedText style={styles.feedEmptySubtext}>
-                Recent activity from the community will show up here.
-              </ThemedText>
-            </View>
-          }
-        />
-      </View>
-
-      <View style={{width: Device.SCREEN_WIDTH}}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
-          {/* Category Toggle */}
-          <View style={styles.rankCategoryRow}>
-            {(['friends', 'gym', 'national'] as RankingCategory[]).map((cat) => (
-              <Pressable
-                key={cat}
-                style={[
-                  styles.rankCategoryBtn,
-                  rankCategory === cat && styles.rankCategoryBtnActive,
-                ]}
-                onPress={() => setRankCategory(cat)}
-              >
-                <Text
-                  style={[
-                    styles.rankCategoryLabel,
-                    { color: rankCategory === cat ? '#fff' : (isDark ? '#aaa' : '#666') },
-                  ]}
-                >
-                  {cat === 'friends' ? 'Friends' : cat === 'gym' ? 'Gym' : 'National'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {rankCategory === 'gym' && (
-            <>
-              <ThemedText style={styles.rankGymCaption}>
-                Top climbers at {rankGym?.name ?? 'Selected Gym'}
-              </ThemedText>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rankGymPickerRow}
-                style={styles.rankGymPicker}
-              >
-                {SINGAPORE_GYMS.map((gym) => (
-                  <Pressable
-                    key={gym.id}
-                    onPress={() => setRankGymId(gym.id)}
-                    style={[
-                      styles.rankGymChip,
-                      rankGymId === gym.id && styles.rankGymChipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.rankGymChipLabel,
-                        { color: rankGymId === gym.id ? '#fff' : (isDark ? '#aaa' : '#666') },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {gym.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </>
-          )}
-
-          {currentRankLoading && (
-            <View style={styles.lbStateCard}>
-              <ActivityIndicator size="small" color={AppColors.primary} />
-              <ThemedText style={styles.lbStateText}>Loading rankings...</ThemedText>
-            </View>
-          )}
-
-          {!currentRankLoading && currentRankError && (
-            <View style={styles.lbStateCard}>
-              <ThemedText style={styles.lbStateText}>{currentRankError}</ThemedText>
-              <Pressable style={styles.lbRetryButton} onPress={() => void refreshCategory(rankCategory)}>
-                <ThemedText style={styles.lbRetryButtonText}>Retry</ThemedText>
-              </Pressable>
-            </View>
-          )}
-
-          {!currentRankLoading && !currentRankError && (
-            <>
-              {/* Podium */}
-              <AnimatedPodium
-                entries={rankEntries}
-                currentUserId={viewerUserId ?? ''}
-                shouldAnimate={shouldAnimateRankings}
-              />
-
-              {/* Community Stats */}
-              {rankEntries.length > 0 && (
-                <View style={styles.lbStatsRow}>
-                  <RankStatHighlight
-                    label="Top Climber"
-                    value={rankEntries[0].user.displayName.split(' ')[0]}
-                  />
-                  <RankStatHighlight
-                    label="Total Hours"
-                    value={`${Math.round(rankEntries.reduce((sum, entry) => sum + entry.totalMinutes, 0) / 60)}h`}
-                  />
-                  <RankStatHighlight
-                    label="Sessions"
-                    value={String(rankEntries.reduce((sum, entry) => sum + entry.totalSessions, 0))}
-                  />
-                </View>
-              )}
-
-              {rankEntries.length === 0 && (
-                <View style={styles.lbEmptyState}>
-                  <ThemedText style={styles.lbEmptyText}>
-                    {rankCategory === 'gym'
-                      ? 'No completed sessions at this gym yet.'
-                      : 'No rankings available yet.'}
-                  </ThemedText>
-                </View>
-              )}
-
-              {/* Your Position */}
-              {showPodium && currentUserRankEntry && currentUserRankEntry.rank > podiumEntryCount && (
-                <View style={styles.lbYourPositionSection}>
-                  <ThemedText type="subtitle" style={styles.lbSectionTitle}>
-                    Your Position
-                  </ThemedText>
-                  <RankLeaderboardCard entry={currentUserRankEntry} isCurrentUser={true} />
-                </View>
-              )}
-
-              {/* Full Leaderboard (4th place onwards when podium is shown) */}
-              {rankingListEntries.length > 0 && (
-                <View style={styles.lbLeaderboardSection}>
-                  <ThemedText type="subtitle" style={styles.lbSectionTitle}>
-                    Rankings
-                  </ThemedText>
-                  {rankingListEntries.map((entry) => (
-                    <RankLeaderboardCard
-                      key={entry.userId}
-                      entry={entry}
-                      isCurrentUser={viewerUserId != null && entry.userId === viewerUserId}
+        <View style={{ flex: 1, overflow: 'hidden' }}>
+          <Reanimated.View
+            style={[
+              { flexDirection: 'row', width: screenWidth * 3, height: '100%' },
+              animatedTabStyle,
+            ]}
+          >
+            <View style={{ width: screenWidth }}>
+              <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.section}>
+                  {activeSession ? (
+                    <ActiveSessionCard
+                      gymName={activeGym?.name || 'Unknown Gym'}
+                      elapsed={elapsed}
+                      onEnd={handleEndSession}
+                      onLogClimb={() => handleLogClimbOpen(activeSession.id, activeSession.gymId)}
+                      session={activeSession}
                     />
+                  ) : lastEndedSession ? (
+                    <>
+                      <SessionSummaryCard
+                        session={lastEndedSession}
+                        sessionsThisWeek={stats.sessionsThisWeek}
+                        climbedWith={friends.slice(0, 3)}
+                      />
+                      <View style={styles.summaryActionsRow}>
+                        <Pressable
+                          style={styles.summaryLogClimbButton}
+                          onPress={() =>
+                            handleLogClimbOpen(lastEndedSession.id, lastEndedSession.gymId)
+                          }
+                        >
+                          <ThemedText style={styles.summaryLogClimbButtonText}>
+                            Log Climb
+                          </ThemedText>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.publishButton, hasPublished && styles.publishButtonDone]}
+                          onPress={hasPublished ? undefined : handleOpenPublish}
+                        >
+                          <ThemedText style={styles.publishButtonText}>
+                            {hasPublished ? '✓ Published' : 'Publish'}
+                          </ThemedText>
+                        </Pressable>
+                        <Pressable
+                          style={[
+                            styles.newSessionButton,
+                            sessionSyncLoading && styles.newSessionButtonLoading,
+                          ]}
+                          onPress={handleStartSession}
+                          disabled={sessionSyncLoading}
+                        >
+                          {sessionSyncLoading ? (
+                            <ActivityIndicator color="#fff" />
+                          ) : (
+                            <ThemedText style={styles.newSessionButtonText}>New Session</ThemedText>
+                          )}
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <IdleSessionCard onStart={handleStartSession} loading={sessionSyncLoading} />
+                  )}
+                </View>
+
+                <View style={styles.sectionDivider} />
+
+                <View style={styles.section}>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>
+                    Invite Friends to Climb
+                  </ThemedText>
+                  <InviteBoxes onInviteNow={handleInviteNow} onMakePlan={handleMakePlan} />
+
+                  {upcomingPlans.length > 0 && (
+                    <View style={styles.upcomingPlansContainer}>
+                      <ThemedText style={styles.upcomingPlansLabel}>Upcoming Plans</ThemedText>
+                      {upcomingPlans.map((plan) => {
+                        const gym = getGymById(plan.gymId);
+                        return (
+                          <UpcomingPlanCard
+                            key={plan.id}
+                            gymName={gym?.name || 'Unknown Gym'}
+                            date={plan.plannedDate}
+                            inviteeCount={plan.invitees.length}
+                          />
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            </View>
+
+            <View style={{ width: screenWidth }}>
+              <FlatList
+                data={recentPosts}
+                keyExtractor={(p) => p.id}
+                renderItem={renderFeedPostItem}
+                contentContainerStyle={styles.feedListContent}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.feedEmptyState}>
+                    <ThemedText style={styles.feedEmptyEmoji}>🧗</ThemedText>
+                    <ThemedText style={styles.feedEmptyText}>No posts yet</ThemedText>
+                    <ThemedText style={styles.feedEmptySubtext}>
+                      Recent activity from the community will show up here.
+                    </ThemedText>
+                  </View>
+                }
+              />
+            </View>
+
+            <View style={{ width: screenWidth }}>
+              <ScrollView style={styles.scrollView} contentContainerStyle={styles.lbScrollContent}>
+                <View style={styles.rankCategoryRow}>
+                  {(['friends', 'gym', 'national'] as RankingCategory[]).map((cat) => (
+                    <Pressable
+                      key={cat}
+                      style={[
+                        styles.rankCategoryBtn,
+                        rankCategory === cat && styles.rankCategoryBtnActive,
+                      ]}
+                      onPress={() => setRankCategory(cat)}
+                    >
+                      <Text
+                        style={[
+                          styles.rankCategoryLabel,
+                          {
+                            color: rankCategory === cat ? '#fff' : isDark ? '#aaa' : '#666',
+                          },
+                        ]}
+                      >
+                        {cat === 'friends' ? 'Friends' : cat === 'gym' ? 'Gym' : 'National'}
+                      </Text>
+                    </Pressable>
                   ))}
                 </View>
-              )}
-            </>
-          )}
-        </ScrollView>
-      </View>
-      </Reanimated.View>
-      </View>
+
+                {rankCategory === 'gym' && (
+                  <>
+                    <ThemedText style={styles.rankGymCaption}>
+                      Top climbers at {rankGym?.name ?? 'Selected Gym'}
+                    </ThemedText>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.rankGymPickerRow}
+                      style={styles.rankGymPicker}
+                    >
+                      {SINGAPORE_GYMS.map((gym) => (
+                        <Pressable
+                          key={gym.id}
+                          onPress={() => setRankGymId(gym.id)}
+                          style={[
+                            styles.rankGymChip,
+                            rankGymId === gym.id && styles.rankGymChipActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.rankGymChipLabel,
+                              {
+                                color: rankGymId === gym.id ? '#fff' : isDark ? '#aaa' : '#666',
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {gym.name}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+
+                {currentRankLoading && (
+                  <View style={styles.lbStateCard}>
+                    <ActivityIndicator size="small" color={AppColors.primary} />
+                    <ThemedText style={styles.lbStateText}>Loading rankings...</ThemedText>
+                  </View>
+                )}
+
+                {!currentRankLoading && currentRankError && (
+                  <View style={styles.lbStateCard}>
+                    <ThemedText style={styles.lbStateText}>{currentRankError}</ThemedText>
+                    <Pressable
+                      style={styles.lbRetryButton}
+                      onPress={() => void refreshCategory(rankCategory)}
+                    >
+                      <ThemedText style={styles.lbRetryButtonText}>Retry</ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+
+                {!currentRankLoading && !currentRankError && (
+                  <>
+                    <AnimatedPodium entries={rankEntries} currentUserId={viewerUserId ?? ''} />
+
+                    {rankEntries.length > 0 && (
+                      <View style={styles.lbStatsRow}>
+                        <RankStatHighlight
+                          label="Top Climber"
+                          value={rankEntries[0].user.displayName.split(' ')[0]}
+                        />
+                        <RankStatHighlight
+                          label="Total Hours"
+                          value={`${Math.round(
+                            rankEntries.reduce((sum, entry) => sum + entry.totalMinutes, 0) / 60,
+                          )}h`}
+                        />
+                        <RankStatHighlight
+                          label="Sessions"
+                          value={String(
+                            rankEntries.reduce((sum, entry) => sum + entry.totalSessions, 0),
+                          )}
+                        />
+                      </View>
+                    )}
+
+                    {rankEntries.length === 0 && (
+                      <View style={styles.lbEmptyState}>
+                        <ThemedText style={styles.lbEmptyText}>
+                          {rankCategory === 'gym'
+                            ? 'No completed sessions at this gym yet.'
+                            : 'No rankings available yet.'}
+                        </ThemedText>
+                      </View>
+                    )}
+
+                    {showPodium && currentUserRankEntry && currentUserRankEntry.rank > podiumEntryCount && (
+                      <View style={styles.lbYourPositionSection}>
+                        <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+                          Your Position
+                        </ThemedText>
+                        <RankLeaderboardCard entry={currentUserRankEntry} isCurrentUser={true} />
+                      </View>
+                    )}
+
+                    {rankingListEntries.length > 0 && (
+                      <View style={styles.lbLeaderboardSection}>
+                        <ThemedText type="subtitle" style={styles.lbSectionTitle}>
+                          Rankings
+                        </ThemedText>
+                        {rankingListEntries.map((entry) => (
+                          <RankLeaderboardCard
+                            key={entry.userId}
+                            entry={entry}
+                            isCurrentUser={viewerUserId != null && entry.userId === viewerUserId}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+            </View>
+          </Reanimated.View>
+        </View>
       </GestureDetector>
-      {/* Gym Picker Modal */}
+
       <GymPickerModal
         visible={gymPickerVisible}
         onClose={() => {
@@ -1114,7 +1205,6 @@ export default function HomeScreen() {
         onSelect={handleGymSelect}
       />
 
-      {/* Friend Picker Modal */}
       <FriendPickerModal
         visible={friendPickerVisible}
         onClose={handleFriendPickerClose}
@@ -1123,7 +1213,6 @@ export default function HomeScreen() {
         mode={inviteFlow === 'none' ? 'invite-now' : inviteFlow}
       />
 
-      {/* Log Climb Modal */}
       {logClimbSessionId && logClimbGymId && (
         <LogClimbModal
           visible={logClimbVisible}
@@ -1134,7 +1223,6 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* Publish Session Modal */}
       <BottomSheetModal
         visible={publishModalVisible}
         onClose={handleClosePublishModal}
@@ -1156,7 +1244,6 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            {/* Description */}
             <ThemedText style={styles.publishLabel}>Description</ThemedText>
             <TextInput
               style={[
@@ -1176,9 +1263,10 @@ export default function HomeScreen() {
               textAlignVertical="top"
             />
 
-            {/* Climbed With */}
             <View style={styles.publishToggleRow}>
-              <ThemedText style={{ fontSize: 14, fontWeight: '600' }}>Include Climbed With</ThemedText>
+              <ThemedText style={{ fontSize: 14, fontWeight: '600' }}>
+                Include Climbed With
+              </ThemedText>
               <Switch
                 value={publishClimbedWith}
                 onValueChange={setPublishClimbedWith}
@@ -1187,7 +1275,6 @@ export default function HomeScreen() {
               />
             </View>
 
-            {/* Submit */}
             <Pressable style={styles.publishSubmitBtn} onPress={() => handlePublishSubmit(dismiss)}>
               <ThemedText style={styles.publishSubmitText}>Publish to Feed</ThemedText>
             </Pressable>
@@ -1238,7 +1325,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  /* Active session */
   activeCardContainer: {
     padding: 16,
     borderRadius: 16,
@@ -1337,7 +1423,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Idle session */
   idleCard: {
     padding: 28,
     borderRadius: 16,
@@ -1524,7 +1609,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  /* Gym picker modal */
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -1605,7 +1689,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* Recent sessions */
   sessionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1633,7 +1716,6 @@ const styles = StyleSheet.create({
     color: '#0a7ea4',
   },
 
-  /* Invite buttons */
   inviteButtonsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1654,7 +1736,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* Friend picker modal */
   friendPickerContent: {
     maxHeight: '85%',
     padding: 16,
@@ -1837,7 +1918,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
-  /* Upcoming plans */
   planCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1863,7 +1943,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  /* ── Top tab switcher ── */
   topTabRow: {
     flexDirection: 'row',
     paddingTop: 12,
@@ -1884,7 +1963,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* ── Feed styles ── */
   feedListContent: {
     paddingTop: 4,
     paddingBottom: 32,
@@ -2052,7 +2130,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  /* ── Ranks / Leaderboard styles ── */
   lbScrollContent: {
     padding: 20,
     paddingTop: 16,
@@ -2156,7 +2233,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 
-  /* ── Rank category toggle ── */
   rankCategoryRow: {
     flexDirection: 'row',
     gap: 8,
@@ -2231,7 +2307,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.7,
   },
-  /* ── Podium ── */
   podiumContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -2287,7 +2362,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,0.5)',
   },
 
-  /* ── Publish modal ── */
   publishLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -2322,4 +2396,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
