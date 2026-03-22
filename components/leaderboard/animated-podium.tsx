@@ -1,62 +1,116 @@
-import React, { memo, useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, useColorScheme, View } from 'react-native';
-
 import { ThemedText } from '@/components/themed-text';
 import { AppColors } from '@/constants/theme';
 import { LeaderboardEntry } from '@/types';
+import { useIsFocused } from '@react-navigation/native';
+import React, { memo, useEffect } from 'react';
+import { StyleSheet, Text, useColorScheme, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
 type AnimatedPodiumProps = {
   entries: LeaderboardEntry[];
   currentUserId: string;
+  shouldAnimate?: boolean;
 };
 
-function AnimatedPodiumInner({ entries, currentUserId }: AnimatedPodiumProps) {
+// 1. The actual animated content
+function PodiumContent({
+  entries,
+  currentUserId,
+  shouldAnimate = true,
+  isFocused,
+}: AnimatedPodiumProps & { isFocused: boolean }) {
   const colorScheme = useColorScheme() ?? 'light';
   const textColor = colorScheme === 'dark' ? '#f1f1f1' : '#111';
   const mutedColor = colorScheme === 'dark' ? '#aaa' : '#666';
-  const top3 = entries.slice(0, 3);
-  const thirdAnim = useRef(new Animated.Value(0)).current;
-  const secondAnim = useRef(new Animated.Value(0)).current;
-  const firstAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    thirdAnim.setValue(0);
-    secondAnim.setValue(0);
-    firstAnim.setValue(0);
-    Animated.stagger(200, [
-      Animated.spring(thirdAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-      Animated.spring(secondAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-      Animated.spring(firstAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-    ]).start();
-  }, [entries, firstAnim, secondAnim, thirdAnim]);
+  const topEntries = entries.slice(0, 3);
+
+  // Default to 0 if animating, 1 if we shouldn't animate at all
+  const anim0 = useSharedValue(shouldAnimate ? 0 : 1); 
+  const anim1 = useSharedValue(shouldAnimate ? 0 : 1); 
+  const anim2 = useSharedValue(shouldAnimate ? 0 : 1);
 
   const podiumColors = ['#fbbf24', '#d1d5db', '#cd7f32'];
   const podiumHeights = [120, 90, 70];
-  const animRefs = [firstAnim, secondAnim, thirdAnim];
-  const displayOrder = [2, 0, 1];
 
-  if (top3.length < 3) return null;
+  const slotOrder =
+    topEntries.length >= 3
+      ? [2, 0, 1]
+      : topEntries.length === 2
+        ? [1, 0, null]
+        : topEntries.length === 1
+          ? [null, 0, null]
+          : [];
+
+  useEffect(() => {
+    if (!isFocused || !shouldAnimate || topEntries.length === 0) return;
+
+    const timingConfig = {
+      duration: 500, 
+      easing: Easing.out(Easing.cubic), 
+    };
+
+    if (topEntries.length > 2) {
+      anim2.value = withDelay(0, withTiming(1, timingConfig));
+    }
+    if (topEntries.length > 1) {
+      anim1.value = withDelay(150, withTiming(1, timingConfig));
+    }
+    if (topEntries.length > 0) {
+      anim0.value = withDelay(300, withTiming(1, timingConfig));
+    }
+  }, [isFocused, shouldAnimate, topEntries.length, anim0, anim1, anim2]);
+
+  const style0 = useAnimatedStyle(() => ({
+    opacity: anim0.value,
+    transform: [{ translateY: interpolate(anim0.value, [0, 1], [60, 0]) }],
+  }));
+
+  const style1 = useAnimatedStyle(() => ({
+    opacity: anim1.value,
+    transform: [{ translateY: interpolate(anim1.value, [0, 1], [60, 0]) }],
+  }));
+
+  const style2 = useAnimatedStyle(() => ({
+    opacity: anim2.value,
+    transform: [{ translateY: interpolate(anim2.value, [0, 1], [60, 0]) }],
+  }));
+
+  const animStyles = [style0, style1, style2];
+
+  // THE FIX: Hardcode the initial un-animated state.
+  // This guarantees the very first Native paint is hidden before Reanimated boots up.
+  const initialHiddenStyle = shouldAnimate 
+    ? { opacity: 0, transform: [{ translateY: 60 }] }
+    : { opacity: 1, transform: [{ translateY: 0 }] };
+
+  if (topEntries.length === 0) return null;
 
   return (
     <View style={styles.podiumContainer}>
-      {displayOrder.map((idx) => {
-        const entry = top3[idx];
-        const anim = animRefs[idx];
+      {slotOrder.map((idx, slotIndex) => {
+        if (idx == null) {
+          return <View key={`podium-slot-empty-${slotIndex}`} style={styles.podiumSlot} />;
+        }
+
+        const entry = topEntries[idx];
         const isUser = entry.userId === currentUserId;
-        const translateY = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [60, 0],
-        });
+        const animatedStyle = animStyles[idx];
 
         return (
           <Animated.View
-            key={entry.userId}
+            key={`podium-entry-${entry.userId}`}
             style={[
               styles.podiumSlot,
-              {
-                opacity: anim,
-                transform: [{ translateY }],
-              },
+              initialHiddenStyle, // Inserted here to prevent the frame mismatch
+              animatedStyle,      // Reanimated overrides this seamlessly
             ]}
           >
             <View
@@ -97,6 +151,13 @@ function AnimatedPodiumInner({ entries, currentUserId }: AnimatedPodiumProps) {
       })}
     </View>
   );
+}
+
+// 2. The Parent Wrapper
+function AnimatedPodiumInner(props: AnimatedPodiumProps) {
+  const isFocused = useIsFocused();
+
+  return <PodiumContent key={isFocused ? 'focused' : 'blurred'} isFocused={isFocused} {...props} />;
 }
 
 export const AnimatedPodium = memo(AnimatedPodiumInner);

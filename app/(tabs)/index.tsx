@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, ScrollView, View, Pressable, FlatList, Image, TextInput, useColorScheme, Text, Alert, Switch, ActivityIndicator } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -479,6 +480,7 @@ function RankStatHighlight({ label, value }: { label: string; value: string }) {
 
 export default function HomeScreen() {
   const searchParams = useLocalSearchParams<{ homeTab?: string }>();
+  const isScreenFocused = useIsFocused();
   const authUser = useAuthStore((state) => state.user);
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
@@ -818,11 +820,13 @@ export default function HomeScreen() {
       : nationalLeaderboard;
   const currentRankLoading = loadingByCategory[rankCategory];
   const currentRankError = errorByCategory[rankCategory];
-  const showPodium = rankEntries.length >= 3;
-  const rankingListEntries = rankEntries.slice(showPodium ? 3 : 0);
+  const podiumEntryCount = Math.min(rankEntries.length, 3);
+  const showPodium = podiumEntryCount > 0;
+  const rankingListEntries = rankEntries.slice(podiumEntryCount);
   const currentUserRankEntry = viewerUserId
     ? rankEntries.find((entry) => entry.userId === viewerUserId)
     : undefined;
+  const shouldAnimateRankings = isScreenFocused && homeTab === 'ranks';
 
   return (
     <ThemedView style={styles.container}>
@@ -1037,6 +1041,7 @@ export default function HomeScreen() {
               <AnimatedPodium
                 entries={rankEntries}
                 currentUserId={viewerUserId ?? ''}
+                shouldAnimate={shouldAnimateRankings}
               />
 
               {/* Community Stats */}
@@ -1068,7 +1073,7 @@ export default function HomeScreen() {
               )}
 
               {/* Your Position */}
-              {showPodium && currentUserRankEntry && currentUserRankEntry.rank > 3 && (
+              {showPodium && currentUserRankEntry && currentUserRankEntry.rank > podiumEntryCount && (
                 <View style={styles.lbYourPositionSection}>
                   <ThemedText type="subtitle" style={styles.lbSectionTitle}>
                     Your Position

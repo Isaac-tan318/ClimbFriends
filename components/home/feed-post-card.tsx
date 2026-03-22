@@ -195,11 +195,11 @@ const styles = StyleSheet.create({
   feedUserName: {
     fontSize: 13,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: 0,
   },
   feedMeta: {
     fontSize: 13,
-    marginLeft: 8,
+    marginLeft: 0,
     marginTop: 1,
     opacity: 0.8,
   },
