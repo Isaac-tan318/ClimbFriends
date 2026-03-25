@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
@@ -6,7 +6,13 @@ import { usePathname } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { useSessionStore } from '@/stores';
 
-export function AppHeaderBanner({ title }: { title: string }) {
+export function AppHeaderBanner({
+  title,
+  rightContent,
+}: {
+  title: string;
+  rightContent?: ReactNode;
+}) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const stats = useSessionStore((state) => state.stats);
@@ -19,12 +25,12 @@ export function AppHeaderBanner({ title }: { title: string }) {
         </ThemedText>
       </View>
 
-      {pathname === '/' && (
+      {rightContent ?? (pathname === '/' && (
         <View style={styles.streakBadge}>
           <ThemedText style={styles.streakEmoji}>🔥</ThemedText>
           <ThemedText style={styles.streakText}>{stats.currentStreak}d</ThemedText>
         </View>
-      )}
+      ))}
     </View>
   );
 }

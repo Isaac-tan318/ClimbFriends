@@ -23,7 +23,6 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
 import { AppColors, Colors } from '@/constants/theme';
@@ -36,6 +35,7 @@ import { IdleSessionCard } from '@/components/home/idle-session-card';
 import { AnimatedPodium } from '@/components/leaderboard/animated-podium';
 import { RankLeaderboardCard } from '@/components/leaderboard/rank-leaderboard-card';
 import { LogClimbModal } from '@/components/log-climb-modal';
+import { GymPickerModal } from '@/components/shared/gym-picker-modal';
 import { BottomSheetDismiss, BottomSheetModal } from '@/components/shared/bottom-sheet-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -186,354 +186,6 @@ function SessionSummaryCard({
   );
 }
 
-function GymPickerModal({
-  visible,
-  onClose,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (gymId: string) => void;
-}) {
-  const modalBg = useThemeColor({}, 'background');
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-
-  return (
-    <BottomSheetModal
-      visible={visible}
-      onClose={onClose}
-      backgroundColor={modalBg}
-      contentStyle={styles.modalContent}
-      dismissThreshold={500}
-      openBackdropDuration={100}
-    >
-      {({ dismiss, dragGesture, onBodyScroll }) => (
-        <>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => dismiss()} style={styles.backButton}>
-              <ThemedText style={styles.backButtonText}>‹</ThemedText>
-            </Pressable>
-            <GestureDetector gesture={dragGesture}>
-              <View style={styles.modalHeaderTitleDragZone}>
-                <ThemedText type="subtitle" style={styles.modalHeaderTitle}>
-                  Select Gym
-                </ThemedText>
-              </View>
-            </GestureDetector>
-            <View style={styles.backButtonSpacer} />
-          </View>
-          <FlatList
-            data={SINGAPORE_GYMS}
-            keyExtractor={(item) => item.id}
-            onScroll={onBodyScroll}
-            scrollEventThrottle={16}
-            renderItem={({ item }) => (
-              <Pressable
-                style={[styles.gymPickerItem, { borderColor }]}
-                onPress={() => onSelect(item.id)}
-              >
-                <ThemedText style={styles.gymPickerName}>{item.name}</ThemedText>
-                <ThemedText style={styles.gymPickerBrand}>{item.brand}</ThemedText>
-              </Pressable>
-            )}
-          />
-        </>
-      )}
-    </BottomSheetModal>
-  );
-}
-
-function UpcomingPlanCard({
-  gymName,
-  date,
-  inviteeCount,
-}: {
-  gymName: string;
-  date: Date;
-  inviteeCount: number;
-}) {
-  const cardBg = useThemeColor({ light: '#f9fafb', dark: '#1a1a1a' }, 'background');
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-
-  return (
-    <View style={[styles.planCard, { backgroundColor: cardBg, borderColor }]}>
-      <View style={styles.planInfo}>
-        <ThemedText style={styles.planGym}>{gymName}</ThemedText>
-        <ThemedText style={styles.planDate}>
-          {format(date, 'EEE, MMM d')} at {format(date, 'h:mm a')}
-        </ThemedText>
-      </View>
-      {inviteeCount > 0 && (
-        <ThemedText style={styles.inviteeCount}>
-          👥 {inviteeCount} {inviteeCount === 1 ? 'friend' : 'friends'}
-        </ThemedText>
-      )}
-    </View>
-  );
-}
-
-function FriendPickerModal({
-  visible,
-  onClose,
-  friends,
-  defaultMessage,
-  mode,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  friends: Friend[];
-  defaultMessage: string;
-  mode: 'invite-now' | 'make-plan';
-}) {
-  const modalBg = useThemeColor({}, 'background');
-  const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
-  const inputBg = useThemeColor({ light: '#f3f4f6', dark: '#2a2a2a' }, 'background');
-  const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [message, setMessage] = useState(defaultMessage);
-  const [planDate, setPlanDate] = useState<Date | null>(null);
-  const [planTime, setPlanTime] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      setSearchQuery('');
-      setSelectedIds(new Set());
-      setMessage(defaultMessage);
-      setPlanDate(null);
-      setPlanTime(null);
-    }
-  }, [visible, defaultMessage]);
-
-  const filteredFriends = useMemo(() => {
-    if (!searchQuery.trim()) return friends;
-    const q = searchQuery.toLowerCase();
-    return friends.filter((f) => f.displayName.toLowerCase().includes(q));
-  }, [friends, searchQuery]);
-
-  const toggleFriend = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const dateOptions = useMemo(() => {
-    const dates: Date[] = [];
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      dates.push(d);
-    }
-    return dates;
-  }, []);
-
-  const timeSlots = useMemo(
-    () => [
-      '6:00 AM',
-      '7:00 AM',
-      '8:00 AM',
-      '9:00 AM',
-      '10:00 AM',
-      '11:00 AM',
-      '12:00 PM',
-      '1:00 PM',
-      '2:00 PM',
-      '3:00 PM',
-      '4:00 PM',
-      '5:00 PM',
-      '6:00 PM',
-      '7:00 PM',
-      '8:00 PM',
-      '9:00 PM',
-      '10:00 PM',
-    ],
-    [],
-  );
-
-  return (
-    <BottomSheetModal
-      visible={visible}
-      onClose={onClose}
-      backgroundColor={modalBg}
-      contentStyle={styles.friendPickerContent}
-      dismissThreshold={400}
-      openBackdropDuration={300}
-    >
-      {({ dismiss, onBodyScroll }) => (
-        <>
-          <View style={styles.friendPickerSearchRow}>
-            <Pressable onPress={() => dismiss()} style={styles.backButton}>
-              <ThemedText style={styles.backButtonText}>‹</ThemedText>
-            </Pressable>
-            <View style={[styles.friendPickerSearchBar, { backgroundColor: inputBg }]}>
-              <TextInput
-                style={[styles.friendPickerSearchInput, { color: textColor }]}
-                placeholder="Search"
-                placeholderTextColor="#888"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-          </View>
-
-          <FlatList
-            data={filteredFriends}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            contentContainerStyle={styles.friendGrid}
-            onScroll={onBodyScroll}
-            scrollEventThrottle={16}
-            ListFooterComponent={
-              <>
-                {mode === 'make-plan' && (
-                  <View style={styles.dateTimeSection}>
-                    <ThemedText style={styles.dateTimeSectionLabel}>Pick a date</ThemedText>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.dateScroll}
-                    >
-                      {dateOptions.map((d, i) => {
-                        const isToday = i === 0;
-                        const isDateSelected =
-                          planDate !== null && d.toDateString() === planDate.toDateString();
-                        return (
-                          <Pressable
-                            key={i}
-                            style={[styles.dateChip, isDateSelected && styles.dateChipSelected]}
-                            onPress={() => setPlanDate(d)}
-                          >
-                            <ThemedText
-                              style={[
-                                styles.dateChipText,
-                                isDateSelected && styles.dateChipTextSelected,
-                              ]}
-                            >
-                              {isToday ? 'Today' : format(d, 'EEE, MMM d')}
-                            </ThemedText>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                    <ThemedText style={[styles.dateTimeSectionLabel, { marginTop: 12 }]}>
-                      Pick a time
-                    </ThemedText>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.timeScroll}
-                    >
-                      {timeSlots.map((t) => {
-                        const isTimeSelected = planTime === t;
-                        return (
-                          <Pressable
-                            key={t}
-                            style={[styles.timeChip, isTimeSelected && styles.timeChipSelected]}
-                            onPress={() => setPlanTime(t)}
-                          >
-                            <ThemedText
-                              style={[
-                                styles.timeChipText,
-                                isTimeSelected && styles.timeChipTextSelected,
-                              ]}
-                            >
-                              {t}
-                            </ThemedText>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-              </>
-            }
-            renderItem={({ item }) => {
-              const isSelected = selectedIds.has(item.id);
-              return (
-                <Pressable style={styles.friendGridItem} onPress={() => toggleFriend(item.id)}>
-                  <View style={styles.friendGridAvatarWrap}>
-                    {item.avatarUrl ? (
-                      <Image source={{ uri: item.avatarUrl }} style={styles.friendGridAvatar} />
-                    ) : (
-                      <View style={styles.friendGridAvatarFallback}>
-                        <ThemedText style={styles.friendGridAvatarText}>
-                          {item.displayName
-                            .split(' ')
-                            .map((w) => w[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </ThemedText>
-                      </View>
-                    )}
-                    {item.isAtGym && !isSelected && <View style={styles.friendGridOnlineDot} />}
-                    {isSelected && (
-                      <View style={styles.friendGridCheck}>
-                        <ThemedText style={styles.friendGridCheckText}>✓</ThemedText>
-                      </View>
-                    )}
-                  </View>
-                  <ThemedText style={styles.friendGridName} numberOfLines={1}>
-                    {item.displayName.split(' ')[0]}
-                  </ThemedText>
-                </Pressable>
-              );
-            }}
-          />
-
-          <View style={[styles.messageInputRow, { borderColor }]}>
-            <TextInput
-              style={[styles.messageInput, { color: textColor }]}
-              placeholder="Write a message..."
-              placeholderTextColor="#888"
-              value={message}
-              onChangeText={setMessage}
-            />
-          </View>
-
-          <Pressable
-            style={[styles.sendButton, selectedIds.size === 0 && { opacity: 0.5 }]}
-            onPress={() => dismiss()}
-            disabled={selectedIds.size === 0}
-          >
-            <ThemedText style={styles.sendButtonText}>Send separately</ThemedText>
-          </Pressable>
-        </>
-      )}
-    </BottomSheetModal>
-  );
-}
-
-function InviteBoxes({
-  onInviteNow,
-  onMakePlan,
-}: {
-  onInviteNow: () => void;
-  onMakePlan: () => void;
-}) {
-  const scheme = useColorScheme();
-  const surfaceBg =
-    scheme === 'dark' ? AppColors.surfaceContainer.dark : AppColors.surfaceContainer.light;
-
-  return (
-    <View style={styles.inviteButtonsRow}>
-      <Pressable style={[styles.inviteBox, { backgroundColor: surfaceBg }]} onPress={onInviteNow}>
-        <MaterialIcons name="bolt" size={32} color={AppColors.primary} />
-        <ThemedText style={styles.inviteBoxText}>Invite Now</ThemedText>
-      </Pressable>
-      <Pressable style={[styles.inviteBox, { backgroundColor: surfaceBg }]} onPress={onMakePlan}>
-        <MaterialIcons name="event" size={32} color={AppColors.primary} />
-        <ThemedText style={styles.inviteBoxText}>Make a Plan</ThemedText>
-      </Pressable>
-    </View>
-  );
-}
-
 type HomeTab = 'tracker' | 'feed' | 'ranks';
 const HOME_TABS: HomeTab[] = ['tracker', 'feed', 'ranks'];
 const SWIPE_TIMING = { duration: 250, easing: Easing.out(Easing.cubic) };
@@ -562,7 +214,6 @@ export default function HomeScreen() {
   const endSession = useSessionStore((state) => state.endSession);
   const logClimb = useSessionStore((state) => state.logClimb);
   const allSessions = useSessionStore((state) => state.sessions);
-  const plannedVisits = useSocialStore((state) => state.plannedVisits);
   const friends = useSocialStore((state) => state.friends);
   const useMockAuthUser = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseAuth;
   const viewerUserId = authUser?.id ?? (useMockAuthUser ? CURRENT_USER.id : null);
@@ -632,9 +283,6 @@ export default function HomeScreen() {
   const [gymPickerVisible, setGymPickerVisible] = useState(false);
   const [lastEndedSession, setLastEndedSession] = useState<ClimbingSession | null>(null);
   const previousActiveSessionRef = useRef<ClimbingSession | null>(null);
-  const [inviteFlow, setInviteFlow] = useState<'none' | 'invite-now' | 'make-plan'>('none');
-  const [inviteGymId, setInviteGymId] = useState<string | null>(null);
-  const [friendPickerVisible, setFriendPickerVisible] = useState(false);
   const [logClimbVisible, setLogClimbVisible] = useState(false);
   const [logClimbSessionId, setLogClimbSessionId] = useState<string | null>(null);
   const [logClimbGymId, setLogClimbGymId] = useState<string | null>(null);
@@ -659,13 +307,6 @@ export default function HomeScreen() {
     handleTabPress(requestedTab);
   }, [handleTabPress, searchParams.homeTab]);
 
-  const upcomingPlans = useMemo(() => {
-    const now = new Date();
-    return plannedVisits
-      .filter((p) => p.plannedDate > now)
-      .sort((a, b) => a.plannedDate.getTime() - b.plannedDate.getTime())
-      .slice(0, 3);
-  }, [plannedVisits]);
 
   useEffect(() => {
     if (previousActiveSessionRef.current && !activeSession) {
@@ -702,15 +343,10 @@ export default function HomeScreen() {
   const handleGymSelect = useCallback(
     (gymId: string) => {
       setGymPickerVisible(false);
-      if (inviteFlow !== 'none') {
-        setInviteGymId(gymId);
-        setFriendPickerVisible(true);
-      } else {
-        startSession(gymId);
-        setLastEndedSession(null);
-      }
+      startSession(gymId);
+      setLastEndedSession(null);
     },
-    [startSession, inviteFlow],
+    [startSession],
   );
 
   const handleEndSession = useCallback(() => {
@@ -750,15 +386,7 @@ export default function HomeScreen() {
     [logClimb, lastEndedSession],
   );
 
-  const handleInviteNow = useCallback(() => {
-    setInviteFlow('invite-now');
-    setGymPickerVisible(true);
-  }, []);
 
-  const handleMakePlan = useCallback(() => {
-    setInviteFlow('make-plan');
-    setGymPickerVisible(true);
-  }, []);
 
   const handleClosePublishModal = useCallback(() => {
     setPublishModalVisible(false);
@@ -809,17 +437,7 @@ export default function HomeScreen() {
     [lastEndedSession, authUser?.id, publishDescription, publishClimbedWith, friends],
   );
 
-  const handleFriendPickerClose = useCallback(() => {
-    setFriendPickerVisible(false);
-    setInviteFlow('none');
-    setInviteGymId(null);
-  }, []);
 
-  const inviteGymName = inviteGymId ? getGymById(inviteGymId)?.name || 'the gym' : 'the gym';
-  const inviteDefaultMessage =
-    inviteFlow === 'invite-now'
-      ? `Come climb with me at ${inviteGymName} right now!`
-      : `Come climb with me at ${inviteGymName}`;
 
   const [allFeedPosts, setAllFeedPosts] = useState<BetaPost[]>(() => getAllRecentBetaPosts(100));
 
@@ -1001,31 +619,6 @@ export default function HomeScreen() {
                   )}
                 </View>
 
-                <View style={styles.sectionDivider} />
-
-                <View style={styles.section}>
-                  <ThemedText type="subtitle" style={styles.sectionTitle}>
-                    Invite Friends to Climb
-                  </ThemedText>
-                  <InviteBoxes onInviteNow={handleInviteNow} onMakePlan={handleMakePlan} />
-
-                  {upcomingPlans.length > 0 && (
-                    <View style={styles.upcomingPlansContainer}>
-                      <ThemedText style={styles.upcomingPlansLabel}>Upcoming Plans</ThemedText>
-                      {upcomingPlans.map((plan) => {
-                        const gym = getGymById(plan.gymId);
-                        return (
-                          <UpcomingPlanCard
-                            key={plan.id}
-                            gymName={gym?.name || 'Unknown Gym'}
-                            date={plan.plannedDate}
-                            inviteeCount={plan.invitees.length}
-                          />
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
               </ScrollView>
             </View>
 
@@ -1202,19 +795,8 @@ export default function HomeScreen() {
 
       <GymPickerModal
         visible={gymPickerVisible}
-        onClose={() => {
-          setGymPickerVisible(false);
-          setInviteFlow('none');
-        }}
+        onClose={() => setGymPickerVisible(false)}
         onSelect={handleGymSelect}
-      />
-
-      <FriendPickerModal
-        visible={friendPickerVisible}
-        onClose={handleFriendPickerClose}
-        friends={friends}
-        defaultMessage={inviteDefaultMessage}
-        mode={inviteFlow === 'none' ? 'invite-now' : inviteFlow}
       />
 
       {logClimbSessionId && logClimbGymId && (
@@ -1655,42 +1237,10 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: '300',
-    marginTop: -2,
-  },
-  backButtonSpacer: {
-    width: 32,
-  },
   modalHeaderTitleDragZone: {
     flex: 1,
     minHeight: 32,
     justifyContent: 'center',
-  },
-  modalHeaderTitle: {
-    textAlign: 'center',
-  },
-  gymPickerItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-  },
-  gymPickerName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  gymPickerBrand: {
-    fontSize: 13,
-    opacity: 0.6,
-    marginTop: 2,
   },
 
   sessionCard: {
@@ -1720,232 +1270,8 @@ const styles = StyleSheet.create({
     color: '#0a7ea4',
   },
 
-  inviteButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  inviteBox: {
-    flex: 1,
-    height: 110,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(128,128,128,0.15)',
-  },
-  inviteBoxText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
 
-  friendPickerContent: {
-    maxHeight: '85%',
-    padding: 16,
-    paddingBottom: 24,
-  },
-  friendPickerHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#666',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  friendPickerSearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 10,
-  },
-  friendPickerSearchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  friendPickerSearchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  friendPickerSearchInput: {
-    flex: 1,
-    fontSize: 16,
-  },
-  friendGrid: {
-    paddingTop: 8,
-  },
-  friendGridItem: {
-    flex: 1 / 3,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  friendGridAvatarWrap: {
-    position: 'relative',
-    marginBottom: 6,
-  },
-  friendGridAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  friendGridAvatarFallback: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#e0e7ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  friendGridAvatarText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#4338ca',
-  },
-  friendGridOnlineDot: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#22c55e',
-    borderWidth: 2,
-    borderColor: '#1c1c1e',
-  },
-  friendGridCheck: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#1c1c1e',
-  },
-  friendGridCheckText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  friendGridName: {
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: 90,
-  },
-  messageInputRow: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  messageInput: {
-    fontSize: 16,
-    paddingVertical: 8,
-  },
-  sendButton: {
-    backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  sendButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  dateTimeSection: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  dateTimeSectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    opacity: 0.7,
-    marginBottom: 8,
-  },
-  dateScroll: {
-    marginBottom: 4,
-  },
-  dateChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#2a2a2a',
-    marginRight: 8,
-  },
-  dateChipSelected: {
-    backgroundColor: '#6366f1',
-  },
-  dateChipText: {
-    fontSize: 13,
-    color: '#ccc',
-  },
-  dateChipTextSelected: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  timeScroll: {
-    marginBottom: 4,
-  },
-  timeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#2a2a2a',
-    marginRight: 8,
-  },
-  timeChipSelected: {
-    backgroundColor: '#6366f1',
-  },
-  timeChipText: {
-    fontSize: 13,
-    color: '#ccc',
-  },
-  timeChipTextSelected: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  upcomingPlansContainer: {
-    marginTop: 4,
-  },
-  upcomingPlansLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 10,
-    opacity: 0.8,
-  },
 
-  planCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  planInfo: {
-    flex: 1,
-  },
-  planGym: {
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  planDate: {
-    fontSize: 13,
-    opacity: 0.7,
-    marginTop: 2,
-  },
-  inviteeCount: {
-    fontSize: 13,
-  },
 
   topTabRow: {
     flexDirection: 'row',
@@ -2400,3 +1726,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+
