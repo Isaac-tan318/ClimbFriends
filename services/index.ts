@@ -1,4 +1,11 @@
 export { authService } from '@/services/auth/auth-service';
+export {
+  GYM_GEOFENCING_TASK_NAME,
+  registerGymGeofencingAsync,
+  requestGymGeofencingPermissionsAsync,
+  stopGymGeofencingAsync,
+  syncGymGeofencingAsync,
+} from '@/services/geofencing/gym-geofencing';
 export { getCurrentUserId } from '@/services/auth/current-user';
 export { feedService } from '@/services/feed/feed-service';
 export { leaderboardService } from '@/services/leaderboard/leaderboard-service';

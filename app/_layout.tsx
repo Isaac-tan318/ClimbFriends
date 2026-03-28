@@ -5,9 +5,11 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import '@/services/geofencing/gym-geofencing';
 
 import { useAuthSessionSync } from '@/hooks/use-auth-session-sync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useGymGeofencingBootstrap } from '@/hooks/use-gym-geofencing-bootstrap';
 import { usePresenceSync } from '@/hooks/use-presence-sync';
 import { useAuthStore } from '@/stores';
 
@@ -22,6 +24,7 @@ export default function RootLayout() {
   const initialized = useAuthStore((state) => state.initialized);
 
   useAuthSessionSync();
+  useGymGeofencingBootstrap();
   usePresenceSync();
 
   useEffect(() => {

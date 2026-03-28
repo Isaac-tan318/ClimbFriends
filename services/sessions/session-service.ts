@@ -206,6 +206,25 @@ export const sessionService = {
     return ok(mapSession(data as DbSessionRow, mappedClimbs));
   },
 
+  async deleteSession(sessionId: string): Promise<AppResult<void>> {
+    if (!sessionId) {
+      return err('Session not found', 'SESSION_NOT_FOUND');
+    }
+
+    if (!hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSessions) {
+      return ok(undefined);
+    }
+
+    const client = getSupabaseClient();
+
+    const { error: deleteError } = await client.from('climbing_sessions').delete().eq('id', sessionId);
+    if (deleteError) {
+      return err(deleteError.message, deleteError.code, deleteError);
+    }
+
+    return ok(undefined);
+  },
+
   async logClimb(input: {
     userId: string;
     sessionId: string;

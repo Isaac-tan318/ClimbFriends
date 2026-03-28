@@ -35,7 +35,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ClimbFriend needs your location to show nearby gyms on the map."
+          "locationWhenInUsePermission": "ClimbFriend uses your location to show nearby gyms and detect when you arrive at a climbing gym.",
+          "locationAlwaysAndWhenInUsePermission": "ClimbFriend uses your location in the background to automatically start a climbing session when you arrive at a gym and end it when you leave.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [
