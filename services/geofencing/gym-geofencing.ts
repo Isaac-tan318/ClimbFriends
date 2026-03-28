@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -11,6 +11,7 @@ import { getCurrentUserId } from '@/services/auth/current-user';
 import { presenceService } from '@/services/presence/presence-service';
 import { sessionService } from '@/services/sessions/session-service';
 import { settingsService } from '@/services/settings/settings-service';
+import { useSessionStore } from '@/stores/session-store';
 
 export const GYM_GEOFENCING_TASK_NAME = 'gym-geofencing-task';
 
@@ -71,6 +72,17 @@ const resolveGeofencingUserIdAsync = async (): Promise<string | null> => {
   return shouldUseMockAuth ? CURRENT_USER.id : null;
 };
 
+const refreshSessionStoreForActiveAppAsync = async () => {
+  if (Platform.OS === 'web' || AppState.currentState !== 'active') {
+    return;
+  }
+
+  const refreshResult = await useSessionStore.getState().refreshSessions();
+  if (!refreshResult.ok) {
+    console.warn('Unable to refresh session store after geofence event:', refreshResult.error.message);
+  }
+};
+
 const handleEnterRegionAsync = async (userId: string, gymId: string) => {
   const sessionsResult = await sessionService.getSessions(userId);
   if (!sessionsResult.ok) {
@@ -110,6 +122,8 @@ const handleEnterRegionAsync = async (userId: string, gymId: string) => {
     currentGymId: gymId,
     isAtGym: true,
   });
+
+  await refreshSessionStoreForActiveAppAsync();
 };
 
 const handleExitRegionAsync = async (userId: string, gymId: string) => {
@@ -142,6 +156,7 @@ const handleExitRegionAsync = async (userId: string, gymId: string) => {
   }
 
   await presenceService.clearCheckIn(userId);
+  await refreshSessionStoreForActiveAppAsync();
 };
 
 const handleGymGeofencingEventAsync = async ({

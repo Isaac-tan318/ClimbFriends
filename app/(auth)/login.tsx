@@ -75,7 +75,8 @@ const LoginForm = React.memo(function LoginForm({
           style={[styles.passwordInput, { color: colors.text }]}
           placeholder="Password"
           placeholderTextColor={placeholderColor}
-          value={password}
+          // do not set the value prop on this input to avoid visual glitch
+          // value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
           textContentType="password"

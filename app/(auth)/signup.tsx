@@ -150,7 +150,8 @@ export default function SignupScreen() {
                 style={[styles.passwordInput, { color: colors.text }]}
                 placeholder="Password"
                 placeholderTextColor={placeholderColor}
-                value={password}
+                // do not set the value prop on this input to avoid visual glitch
+                // value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 textContentType="newPassword"
@@ -173,7 +174,8 @@ export default function SignupScreen() {
                 style={[styles.passwordInput, { color: colors.text }]}
                 placeholder="Confirm password"
                 placeholderTextColor={placeholderColor}
-                value={confirmPassword}
+                // do not set the value prop on this input to avoid visual glitch
+                // value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
                 textContentType="newPassword"
