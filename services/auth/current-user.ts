@@ -4,10 +4,10 @@ export const getCurrentUserId = async (): Promise<string | null> => {
   if (!supabase) return null;
 
   const {
-    data: { user },
+    data: { session },
     error,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getSession();
 
-  if (error || !user) return null;
-  return user.id;
+  if (error || !session) return null;
+  return session.user.id;
 };

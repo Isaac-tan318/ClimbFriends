@@ -27,9 +27,9 @@ const getDistanceMeters = (
   const a =
     Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
     Math.cos(toRadians(first.latitude)) *
-      Math.cos(toRadians(second.latitude)) *
-      Math.sin(deltaLongitude / 2) *
-      Math.sin(deltaLongitude / 2);
+    Math.cos(toRadians(second.latitude)) *
+    Math.sin(deltaLongitude / 2) *
+    Math.sin(deltaLongitude / 2);
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
@@ -156,6 +156,8 @@ const handleExitRegionAsync = async (userId: string, gymId: string) => {
 
   const activeSession = sessionsResult.data.find((session) => session.isActive) ?? null;
   if (!activeSession || activeSession.gymId !== gymId) {
+    console.log('Active session:', JSON.stringify(activeSession));
+    console.log('Incoming gymId from region:', gymId);
     console.log('ℹ️ [GEOFENCE EXIT] No matching active session found for this exit event. Ignoring.');
     return;
   }
@@ -182,6 +184,8 @@ const handleExitRegionAsync = async (userId: string, gymId: string) => {
   await presenceService.clearCheckIn(userId);
   await refreshSessionStoreForActiveAppAsync();
 };
+
+let isHandlingGeofenceEvent = false;
 
 const handleGymGeofencingEventAsync = async ({
   eventType,
@@ -372,19 +376,28 @@ export const evaluateCurrentLocationAsync = async () => {
         { latitude: gym.latitude, longitude: gym.longitude }
       );
 
-      if (gym.id.includes('test')) { 
-        console.log(`📏 Math Check -> You are ${Math.round(distance)} meters away from ${gym.name}`);
+      if (gym.id.includes('test')) {
+        console.log(`📍 [GEOFENCE CHECK] Distance to ${gym.name}: ${Math.round(distance)} meters`);
+        console.log('lat and long of user:', location.coords.latitude, location.coords.longitude);
       }
-      
+
       // If they are currently standing inside a gym, force the Enter logic!
       if (distance <= gym.radiusMeters) {
         console.log(`🎯 [GEOFENCE MANUAL CHECK] User is currently inside: ${gym.id}`);
         await handleEnterRegionAsync(userId, gym.id);
-        return; 
+        return;
       }
     }
-    
+
     console.log('🤷 [GEOFENCE MANUAL CHECK] User is not inside any gym.');
+    const sessionsResult = await sessionService.getSessions(userId);
+    if (sessionsResult.ok) {
+      const activeSession = sessionsResult.data.find((s) => s.isActive) ?? null;
+      if (activeSession) {
+        console.log(`🏃 [GEOFENCE MANUAL CHECK] Closing stale session at ${activeSession.gymId}`);
+        await handleExitRegionAsync(userId, activeSession.gymId);
+      }
+    }
   } catch (error) {
     console.warn('❌ [GEOFENCE MANUAL CHECK] Failed to check location:', error);
   }
