@@ -55,7 +55,7 @@ export const CURRENT_USER = MOCK_USERS[0]; // Isaac Tan
 
 export const CURRENT_USER_SETTINGS: UserSettings = {
   userId: CURRENT_USER.id,
-  locationEnabled: true,
+  locationEnabled: false,
   friendVisibilityEnabled: true,
   notificationsEnabled: true,
 };

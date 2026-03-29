@@ -28,7 +28,7 @@ interface SettingsState {
 
 const DEFAULT_SETTINGS: UserSettings = {
   userId: 'user-1',
-  locationEnabled: true,
+  locationEnabled: false,
   friendVisibilityEnabled: true,
   notificationsEnabled: true,
 };

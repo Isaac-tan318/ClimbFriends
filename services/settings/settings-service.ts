@@ -45,7 +45,7 @@ export const settingsService = {
     if (!data) {
       const createResult = await this.updateSettings(userId, {
         userId,
-        locationEnabled: true,
+        locationEnabled: false,
         friendVisibilityEnabled: true,
         notificationsEnabled: true,
       });

@@ -41,12 +41,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useRankings, type RankingCategory } from '@/hooks/use-rankings';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAuthStore, useSessionStore, useSocialStore } from '@/stores';
+import { useAuthStore, useSessionStore, useSettingsStore, useSocialStore } from '@/stores';
 import { getGymById, SINGAPORE_GYMS, CURRENT_USER } from '@/data';
 import { getAllRecentBetaPosts } from '@/data/mock-beta';
 import type { BetaPost, ClimbingSession, Friend, LoggedClimb } from '@/types';
 import { hasSupabaseConfig } from '@/lib/supabase';
 import { feedService } from '@/services/feed/feed-service';
+import { stopGymGeofencingAsync, syncGymGeofencingAsync, evaluateCurrentLocationAsync } from '@/services/geofencing/gym-geofencing';
 
 function useElapsedTime(startedAt: Date | null) {
   const [elapsed, setElapsed] = useState(0);
@@ -210,6 +211,10 @@ export default function HomeScreen() {
   const stats = useSessionStore((state) => state.stats);
   const activeSession = useSessionStore((state) => state.activeSession);
   const sessionSyncLoading = useSessionStore((state) => state.sync.loading);
+  const locationEnabled = useSettingsStore((state) => state.settings.locationEnabled);
+  const settingsInitialized = useSettingsStore((state) => state.sync.initialized);
+  const settingsSyncLoading = useSettingsStore((state) => state.sync.loading);
+  const setLocationEnabled = useSettingsStore((state) => state.setLocationEnabled);
   const startSession = useSessionStore((state) => state.startSession);
   const endSession = useSessionStore((state) => state.endSession);
   const logClimb = useSessionStore((state) => state.logClimb);
@@ -291,11 +296,13 @@ export default function HomeScreen() {
   const [publishDescription, setPublishDescription] = useState('');
   const [publishClimbedWith, setPublishClimbedWith] = useState<boolean>(false);
   const [hasPublished, setHasPublished] = useState(false);
+  const [autoTrackingLoading, setAutoTrackingLoading] = useState(false);
 
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
 
   const activeGym = activeSession?.gymId ? getGymById(activeSession.gymId) : null;
   const rankGym = rankGymId ? getGymById(rankGymId) : null;
+  const autoTrackingEnabled = settingsInitialized && locationEnabled;
 
   useEffect(() => {
     if (requestedHomeTabRef.current) return;
@@ -365,6 +372,66 @@ export default function HomeScreen() {
     setLogClimbGymId(gymId);
     setLogClimbVisible(true);
   }, []);
+
+  const handleToggleAutoTracking = useCallback(async () => {
+    if (autoTrackingLoading) {
+      return;
+    }
+
+    setAutoTrackingLoading(true);
+
+    try {
+      if (autoTrackingEnabled) {
+        await setLocationEnabled(false);
+        await syncGymGeofencingAsync({ enabled: false, promptForPermissions: false });
+        return;
+      }
+
+      const geofencingResult = await syncGymGeofencingAsync({
+        enabled: true,
+        promptForPermissions: true,
+      });
+
+      if (!geofencingResult.ok || !geofencingResult.data.running) {
+        Alert.alert(
+          'Permission Required',
+          'You need to grant "Always Allow" location access to enable auto-tracking.',
+        );
+        return;
+      }
+
+      const settingsResult = await setLocationEnabled(true);
+      if (!settingsResult.ok) {
+        await stopGymGeofencingAsync();
+        Alert.alert('Error', settingsResult.error.message);
+        return;
+      }
+
+      const restartResult = await syncGymGeofencingAsync({
+        enabled: true,
+        promptForPermissions: false,
+      });
+      if (!restartResult.ok || !restartResult.data.running) {
+        Alert.alert(
+          'Auto tracking not fully started',
+          restartResult.ok
+            ? 'Auto tracking was enabled, but geofencing did not restart successfully.'
+            : restartResult.error.message,
+        );
+        return;
+      }
+
+      // Force a manual check so if they are already at the gym, it starts instantly!
+      await evaluateCurrentLocationAsync();
+      
+      Alert.alert(
+        'Auto tracking enabled',
+        'ClimbFriends can now auto-start and auto-end sessions when you arrive at or leave a gym.',
+      );
+    } finally {
+      setAutoTrackingLoading(false);
+    }
+  }, [autoTrackingLoading, autoTrackingEnabled, setLocationEnabled]);
 
   const handleLogClimbSubmit = useCallback(
     (climb: Omit<LoggedClimb, 'id' | 'loggedAt'>) => {
@@ -489,6 +556,11 @@ export default function HomeScreen() {
   const mutedText = isDark ? '#999' : '#666';
   const cardBorder = isDark ? AppColors.border.dark : AppColors.border.light;
   const surfaceBg = isDark ? AppColors.surface.dark : AppColors.surface.light;
+  const autoTrackingStatusText = !settingsInitialized
+    ? 'Checking your auto-tracking status...'
+    : autoTrackingEnabled
+    ? 'Auto tracking is enabled for background gym arrival and exit detection.'
+    : 'Allow background location so sessions can start and end automatically when you enter or leave a gym.';
 
   const renderFeedPostItem = useCallback(
     ({ item }: { item: BetaPost }) => {
@@ -617,6 +689,43 @@ export default function HomeScreen() {
                   ) : (
                     <IdleSessionCard onStart={handleStartSession} loading={sessionSyncLoading} />
                   )}
+
+                  <View
+                    style={[
+                      styles.autoTrackingCard,
+                      {
+                        backgroundColor: surfaceBg,
+                        borderColor: autoTrackingEnabled ? '#22c55e' : cardBorder,
+                      },
+                    ]}
+                  >
+                    <ThemedText style={styles.autoTrackingTitle}>Auto Tracking</ThemedText>
+                    <ThemedText style={styles.autoTrackingSubtitle}>{autoTrackingStatusText}</ThemedText>
+                    <Pressable
+                      style={[
+                        styles.autoTrackingButton,
+                        autoTrackingEnabled && styles.autoTrackingButtonEnabled,
+                        (autoTrackingLoading || settingsSyncLoading || !settingsInitialized) &&
+                          styles.autoTrackingButtonDisabled,
+                      ]}
+                      onPress={() => {
+                        void handleToggleAutoTracking();
+                      }}
+                      disabled={autoTrackingLoading || settingsSyncLoading || !settingsInitialized}
+                    >
+                      {autoTrackingLoading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <ThemedText style={styles.autoTrackingButtonText}>
+                          {!settingsInitialized
+                            ? 'Checking Auto Tracking...'
+                            : autoTrackingEnabled
+                              ? 'Disable Auto Tracking'
+                              : 'Enable Auto Tracking'}
+                        </ThemedText>
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
 
               </ScrollView>
@@ -1029,6 +1138,41 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  autoTrackingCard: {
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  autoTrackingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  autoTrackingSubtitle: {
+    fontSize: 13,
+    opacity: 0.7,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  autoTrackingButton: {
+    backgroundColor: AppColors.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoTrackingButtonEnabled: {
+    backgroundColor: '#22c55e',
+  },
+  autoTrackingButtonDisabled: {
+    opacity: 0.9,
+  },
+  autoTrackingButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
   },
   startButton: {
     backgroundColor: AppColors.primary,

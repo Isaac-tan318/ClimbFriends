@@ -15,6 +15,24 @@ import { useSessionStore } from '@/stores/session-store';
 
 export const GYM_GEOFENCING_TASK_NAME = 'gym-geofencing-task';
 
+// --- ADD THIS MATH HELPER ---
+const toRadians = (value: number) => (value * Math.PI) / 180;
+const getDistanceMeters = (
+  first: { latitude: number; longitude: number },
+  second: { latitude: number; longitude: number }
+) => {
+  const earthRadiusMeters = 6371000;
+  const deltaLatitude = toRadians(second.latitude - first.latitude);
+  const deltaLongitude = toRadians(second.longitude - first.longitude);
+  const a =
+    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+    Math.cos(toRadians(first.latitude)) *
+      Math.cos(toRadians(second.latitude)) *
+      Math.sin(deltaLongitude / 2) *
+      Math.sin(deltaLongitude / 2);
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 type GymGeofencingTaskData = {
   eventType: Location.GeofencingEventType;
   region: Location.LocationRegion;
@@ -41,7 +59,7 @@ const buildGymGeofencingRegions = (): Location.LocationRegion[] => {
   if (Platform.OS === 'ios' && SINGAPORE_GYMS.length > IOS_GEOFENCE_REGION_LIMIT) {
     console.warn(
       `iOS only supports monitoring up to ${IOS_GEOFENCE_REGION_LIMIT} geofences at a time. ` +
-        'Extra gyms were skipped during registration.',
+      'Extra gyms were skipped during registration.',
     );
   }
 
@@ -59,7 +77,6 @@ const isGeofencingSupportedAsync = async (): Promise<boolean> => {
   if (Platform.OS === 'web') {
     return false;
   }
-
   return TaskManager.isAvailableAsync();
 };
 
@@ -68,7 +85,6 @@ const resolveGeofencingUserIdAsync = async (): Promise<string | null> => {
   if (userId) {
     return userId;
   }
-
   return shouldUseMockAuth ? CURRENT_USER.id : null;
 };
 
@@ -84,15 +100,18 @@ const refreshSessionStoreForActiveAppAsync = async () => {
 };
 
 const handleEnterRegionAsync = async (userId: string, gymId: string) => {
+  console.log(`🚪 [GEOFENCE ENTER] Processing entry for Gym: ${gymId}`);
+
   const sessionsResult = await sessionService.getSessions(userId);
   if (!sessionsResult.ok) {
-    console.warn('Unable to load sessions during geofence enter:', sessionsResult.error.message);
+    console.warn('❌ [GEOFENCE ENTER] Unable to load sessions:', sessionsResult.error.message);
     return;
   }
 
   const activeSession = sessionsResult.data.find((session) => session.isActive) ?? null;
 
   if (activeSession?.gymId === gymId) {
+    console.log('ℹ️ [GEOFENCE ENTER] Session already active for this gym. Updating presence only.');
     await presenceService.updatePresence({
       userId,
       currentGymId: gymId,
@@ -102,18 +121,18 @@ const handleEnterRegionAsync = async (userId: string, gymId: string) => {
   }
 
   if (activeSession && activeSession.gymId !== gymId) {
+    console.log(`🔄 [GEOFENCE ENTER] Ending previous session at ${activeSession.gymId} before starting new one.`);
     const endResult = await sessionService.endSession(activeSession.id);
     if (!endResult.ok) {
-      console.warn('Unable to close previous session during geofence handoff:', endResult.error.message);
+      console.warn('❌ [GEOFENCE ENTER] Unable to close previous session:', endResult.error.message);
       return;
     }
   }
 
-  // This is an intentionally provisional "ghost" session. If the user exits the geofence before
-  // two minutes elapse, handleExitRegionAsync deletes it entirely instead of ending it.
+  console.log('✅ [GEOFENCE ENTER] Starting new provisional session in database.');
   const startResult = await sessionService.startSession(userId, gymId);
   if (!startResult.ok) {
-    console.warn('Unable to start session from geofence enter:', startResult.error.message);
+    console.warn('❌ [GEOFENCE ENTER] Failed to start session:', startResult.error.message);
     return;
   }
 
@@ -127,30 +146,35 @@ const handleEnterRegionAsync = async (userId: string, gymId: string) => {
 };
 
 const handleExitRegionAsync = async (userId: string, gymId: string) => {
+  console.log(`🏃 [GEOFENCE EXIT] Processing exit for Gym: ${gymId}`);
+
   const sessionsResult = await sessionService.getSessions(userId);
   if (!sessionsResult.ok) {
-    console.warn('Unable to load sessions during geofence exit:', sessionsResult.error.message);
+    console.warn('❌ [GEOFENCE EXIT] Unable to load sessions:', sessionsResult.error.message);
     return;
   }
 
   const activeSession = sessionsResult.data.find((session) => session.isActive) ?? null;
   if (!activeSession || activeSession.gymId !== gymId) {
-    // Exit events can arrive after a cold start, after a manual session end, or after the user
-    // already moved into another gym. Only close the session that matches the emitting region.
+    console.log('ℹ️ [GEOFENCE EXIT] No matching active session found for this exit event. Ignoring.');
     return;
   }
 
   const elapsedMs = Date.now() - activeSession.startedAt.getTime();
+  console.log(`⏱️ [GEOFENCE EXIT] Dwell time was: ${elapsedMs}ms`);
+
   if (elapsedMs < DWELL_REQUIREMENT_MS) {
+    console.log('🗑️ [GEOFENCE EXIT] Drive-by detected (Under 2 mins). Deleting ghost session.');
     const deleteResult = await sessionService.deleteSession(activeSession.id);
     if (!deleteResult.ok) {
-      console.warn('Unable to delete provisional session after short dwell:', deleteResult.error.message);
+      console.warn('❌ [GEOFENCE EXIT] Failed to delete ghost session:', deleteResult.error.message);
       return;
     }
   } else {
+    console.log('✅ [GEOFENCE EXIT] Valid session. Ending normally.');
     const endResult = await sessionService.endSession(activeSession.id);
     if (!endResult.ok) {
-      console.warn('Unable to end session from geofence exit:', endResult.error.message);
+      console.warn('❌ [GEOFENCE EXIT] Failed to end session:', endResult.error.message);
       return;
     }
   }
@@ -164,26 +188,29 @@ const handleGymGeofencingEventAsync = async ({
   region,
 }: GymGeofencingTaskData): Promise<void> => {
   const gymId = region.identifier;
+  console.log(`📍 [GEOFENCE EVENT] Fired for: ${gymId} | Type: ${eventType === Location.GeofencingEventType.Enter ? 'ENTER' : 'EXIT'}`);
+
   if (!gymId || !getGymById(gymId)) {
-    console.warn('Received geofence event for an unknown gym region:', region.identifier);
+    console.warn('❌ [GEOFENCE EVENT] Unknown gym region identifier:', region.identifier);
     return;
   }
 
   const userId = await resolveGeofencingUserIdAsync();
   if (!userId) {
-    // A signed-out user should not keep background monitoring active. Stopping the task here keeps
-    // native geofences from lingering if the app is relaunched headlessly after sign-out.
+    console.warn('🛑 [GEOFENCE AUTH] No user logged in! Stopping background geofencing.');
     await stopGymGeofencingAsync();
     return;
   }
+  console.log(`👤 [GEOFENCE AUTH] User resolved: ${userId}`);
 
   const settingsResult = await settingsService.getSettings(userId);
   if (!settingsResult.ok) {
-    console.warn('Unable to load settings during geofence event:', settingsResult.error.message);
+    console.warn('❌ [GEOFENCE SETTINGS] Unable to load settings:', settingsResult.error.message);
     return;
   }
 
   if (!settingsResult.data.locationEnabled) {
+    console.log('🛑 [GEOFENCE SETTINGS] Location is disabled in app settings. Stopping tasks.');
     await stopGymGeofencingAsync();
     return;
   }
@@ -201,18 +228,16 @@ const handleGymGeofencingEventAsync = async ({
 if (!TaskManager.isTaskDefined(GYM_GEOFENCING_TASK_NAME)) {
   TaskManager.defineTask<GymGeofencingTaskData>(GYM_GEOFENCING_TASK_NAME, async ({ data, error }) => {
     if (error) {
-      console.error('Gym geofencing task failed before handling the event:', error.message);
+      console.error('💥 [TASK MANAGER FATAL] Task failed before handling event:', error.message);
       return;
     }
 
     if (!data) {
-      console.warn('Gym geofencing task ran without an event payload.');
+      console.warn('⚠️ [TASK MANAGER] Task ran without a payload.');
       return;
     }
 
-    // Background tasks can run after iOS relaunches a terminated app, before any React tree exists.
-    // This handler intentionally avoids Zustand/React state and rebuilds everything from persistent
-    // auth + backend state so enter/exit events stay correct across cold starts.
+    console.log('\n🚨 --- [BACKGROUND TASK WOKE UP] --- 🚨');
     await handleGymGeofencingEventAsync(data);
   });
 }
@@ -225,97 +250,79 @@ export const requestGymGeofencingPermissionsAsync = async (): Promise<
 > => {
   const isSupported = await isGeofencingSupportedAsync();
   if (!isSupported) {
-    return err(
-      'Background geofencing is unavailable here. Use a development build or standalone app instead of Expo Go.',
-      'GEOFENCING_UNAVAILABLE',
-    );
+    return err('Background geofencing unavailable (Are you on Expo Go?).', 'GEOFENCING_UNAVAILABLE');
   }
 
   const servicesEnabled = await Location.hasServicesEnabledAsync();
   if (!servicesEnabled) {
-    return err('Location services are turned off on this device.', 'LOCATION_SERVICES_DISABLED');
+    return err('Location services are turned off on device.', 'LOCATION_SERVICES_DISABLED');
   }
 
   const foreground = await Location.requestForegroundPermissionsAsync();
   if (!isLocationPermissionGranted(foreground)) {
-    return err(
-      'Foreground location permission is required before background geofencing can be enabled.',
-      'FOREGROUND_PERMISSION_DENIED',
-      foreground,
-    );
+    return err('Foreground permission denied.', 'FOREGROUND_PERMISSION_DENIED', foreground);
   }
 
   const background = await Location.requestBackgroundPermissionsAsync();
   if (!isLocationPermissionGranted(background)) {
-    return err(
-      Platform.OS === 'android'
-        ? 'Background location permission was not granted. On Android 11+ the system may send the user to Settings to approve it.'
-        : 'Background location permission was not granted. iOS geofencing needs the Always location permission in a standalone build.',
-      'BACKGROUND_PERMISSION_DENIED',
-      background,
-    );
+    return err('Background permission denied.', 'BACKGROUND_PERMISSION_DENIED', background);
   }
 
   return ok({ foreground, background });
 };
 
 export const registerGymGeofencingAsync = async (): Promise<
-  AppResult<{
-    regions: Location.LocationRegion[];
-  }>
+  AppResult<{ regions: Location.LocationRegion[] }>
 > => {
+  console.log('📝 [GEOFENCE REGISTRATION] Attempting to register regions...');
   const permissionsResult = await requestGymGeofencingPermissionsAsync();
   if (!permissionsResult.ok) {
+    console.warn('❌ [GEOFENCE REGISTRATION] Permission failed:', permissionsResult.error.message);
     return permissionsResult;
   }
 
   const regions = buildGymGeofencingRegions();
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
 
+  console.log(`✅ [GEOFENCE REGISTRATION] Successfully registered ${regions.length} gyms with OS.`);
   return ok({ regions });
 };
 
 export const stopGymGeofencingAsync = async (): Promise<AppResult<void>> => {
+  console.log('🛑 [GEOFENCE CONTROL] Stopping background geofencing...');
   const isSupported = await isGeofencingSupportedAsync();
-  if (!isSupported) {
-    return ok(undefined);
-  }
+  if (!isSupported) return ok(undefined);
 
-  const isRunning = await Location.hasStartedGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
-  if (!isRunning) {
-    return ok(undefined);
-  }
+  try {
+    const isRunning = await Location.hasStartedGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
+    if (!isRunning) return ok(undefined);
 
-  await Location.stopGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
+    await Location.stopGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
+    console.log('✅ [GEOFENCE CONTROL] Geofencing stopped.');
+  } catch (error: any) {
+    // If the OS throws "Not authorized", it means geofencing is definitely 
+    // not running because the user hasn't granted permissions yet.
+    // We can safely ignore this error during a stop/cleanup operation.
+    console.log('ℹ️ [GEOFENCE CONTROL] Skipped stop check (no permissions granted yet).');
+  }
   return ok(undefined);
+
 };
 
 export const syncGymGeofencingAsync = async (input: {
   enabled: boolean;
   promptForPermissions: boolean;
 }): Promise<AppResult<GymGeofencingSyncResult>> => {
+  console.log(`🔄 [GEOFENCE SYNC] Syncing... Enabled: ${input.enabled}`);
   const isSupported = await isGeofencingSupportedAsync();
   if (!isSupported) {
-    return ok({
-      enabled: input.enabled,
-      running: false,
-      promptedForPermissions: false,
-      regions: [],
-    });
+    return ok({ enabled: input.enabled, running: false, promptedForPermissions: false, regions: [] });
   }
 
   if (!input.enabled) {
     const stopResult = await stopGymGeofencingAsync();
-    if (!stopResult.ok) {
-      return stopResult;
-    }
-
-    return ok({
-      enabled: false,
-      running: false,
-      promptedForPermissions: false,
-      regions: [],
-    });
+    if (!stopResult.ok) return stopResult;
+    return ok({ enabled: false, running: false, promptedForPermissions: false, regions: [] });
   }
 
   const [foreground, background, servicesEnabled] = await Promise.all([
@@ -325,47 +332,60 @@ export const syncGymGeofencingAsync = async (input: {
   ]);
 
   if (!servicesEnabled) {
-    return ok({
-      enabled: true,
-      running: false,
-      promptedForPermissions: false,
-      regions: [],
-    });
+    return ok({ enabled: true, running: false, promptedForPermissions: false, regions: [] });
   }
 
-  const alreadyGranted =
-    isLocationPermissionGranted(foreground) && isLocationPermissionGranted(background);
+  const alreadyGranted = isLocationPermissionGranted(foreground) && isLocationPermissionGranted(background);
 
   if (!alreadyGranted && input.promptForPermissions) {
     const registerResult = await registerGymGeofencingAsync();
     if (!registerResult.ok) {
       return err(registerResult.error.message, registerResult.error.code, registerResult.error.details);
     }
-
-    return ok({
-      enabled: true,
-      running: true,
-      promptedForPermissions: true,
-      regions: registerResult.data.regions,
-    });
+    return ok({ enabled: true, running: true, promptedForPermissions: true, regions: registerResult.data.regions });
   }
 
   if (!alreadyGranted) {
-    return ok({
-      enabled: true,
-      running: false,
-      promptedForPermissions: false,
-      regions: [],
-    });
+    return ok({ enabled: true, running: false, promptedForPermissions: false, regions: [] });
   }
 
   const regions = buildGymGeofencingRegions();
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
 
-  return ok({
-    enabled: true,
-    running: true,
-    promptedForPermissions: false,
-    regions,
-  });
+  return ok({ enabled: true, running: true, promptedForPermissions: false, regions });
+};
+
+export const evaluateCurrentLocationAsync = async () => {
+  try {
+    console.log('🔍 [GEOFENCE MANUAL CHECK] Checking current location against gyms...');
+    const userId = await resolveGeofencingUserIdAsync();
+    if (!userId) return;
+
+    // Grab a quick, single GPS ping
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    for (const gym of SINGAPORE_GYMS) {
+      const distance = getDistanceMeters(
+        { latitude: location.coords.latitude, longitude: location.coords.longitude },
+        { latitude: gym.latitude, longitude: gym.longitude }
+      );
+
+      if (gym.id.includes('test')) { 
+        console.log(`📏 Math Check -> You are ${Math.round(distance)} meters away from ${gym.name}`);
+      }
+      
+      // If they are currently standing inside a gym, force the Enter logic!
+      if (distance <= gym.radiusMeters) {
+        console.log(`🎯 [GEOFENCE MANUAL CHECK] User is currently inside: ${gym.id}`);
+        await handleEnterRegionAsync(userId, gym.id);
+        return; 
+      }
+    }
+    
+    console.log('🤷 [GEOFENCE MANUAL CHECK] User is not inside any gym.');
+  } catch (error) {
+    console.warn('❌ [GEOFENCE MANUAL CHECK] Failed to check location:', error);
+  }
 };
