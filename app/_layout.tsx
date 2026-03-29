@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import '@/lib/mapbox';
 import '@/services/geofencing/gym-geofencing';
 
 import { useAuthSessionSync } from '@/hooks/use-auth-session-sync';

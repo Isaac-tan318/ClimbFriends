@@ -1,67 +1,94 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { Pressable, StyleSheet, View, useColorScheme } from 'react-native';
+import { Camera, LocationPuck, MapView, MarkerView } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useColorScheme } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { GymDrawer, BRAND_COLORS } from '@/components/gym-drawer';
 import { SINGAPORE_GYMS } from '@/data';
+import { getMapboxStyleURL, hasMapboxConfig } from '@/lib/mapbox';
 import { Gym, Friend } from '@/types';
 
-const SINGAPORE_REGION = {
-  latitude: 1.3521,
-  longitude: 103.8198,
-  latitudeDelta: 0.18,
-  longitudeDelta: 0.18,
+type MapboxCoordinate = [number, number];
+
+const SINGAPORE_CENTER: MapboxCoordinate = [103.8198, 1.3521];
+const DEFAULT_ZOOM_LEVEL = 9.5;
+const MAP_PADDING = {
+  paddingTop: 48,
+  paddingRight: 48,
+  paddingBottom: 48,
+  paddingLeft: 48,
 };
 
+const toMapboxCoordinate = (gym: Pick<Gym, 'latitude' | 'longitude'>): MapboxCoordinate => [
+  gym.longitude,
+  gym.latitude,
+];
+
+const getGymBounds = (gyms: Gym[]) => {
+  if (!gyms.length) {
+    return null;
+  }
+
+  return gyms.reduce(
+    (bounds, gym) => ({
+      ne: [Math.max(bounds.ne[0], gym.longitude), Math.max(bounds.ne[1], gym.latitude)] as MapboxCoordinate,
+      sw: [Math.min(bounds.sw[0], gym.longitude), Math.min(bounds.sw[1], gym.latitude)] as MapboxCoordinate,
+    }),
+    {
+      ne: toMapboxCoordinate(gyms[0]),
+      sw: toMapboxCoordinate(gyms[0]),
+    },
+  );
+};
+
+const GYM_BOUNDS = getGymBounds(SINGAPORE_GYMS);
+
 function GymMarker({ gym, friends, onPress }: { gym: Gym; friends: Friend[]; onPress: (g: Gym) => void }) {
-  const [tracked, setTracked] = useState(true);
   const brandColor = BRAND_COLORS[gym.brand] ?? '#6b7280';
   const friendsHere = friends.filter((f) => f.currentGymId === gym.id && f.isAtGym);
 
-  useEffect(() => {
-    const t = setTimeout(() => setTracked(false), 500);
-    return () => clearTimeout(t);
-  }, []);
-
   return (
-    <Marker
-      coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
-      onPress={() => onPress(gym)}
-      tracksViewChanges={tracked}
-    >
-      <View style={[styles.customMarker, { backgroundColor: brandColor }]}>
+    <MarkerView coordinate={toMapboxCoordinate(gym)} allowOverlap allowOverlapWithPuck>
+      <Pressable onPress={() => onPress(gym)} style={[styles.customMarker, { backgroundColor: brandColor }]}>
         <MaterialIcons name="fitness-center" size={16} color="white" />
         {friendsHere.length > 0 && (
           <View style={styles.markerBadge}>
             <ThemedText style={styles.markerBadgeText}>{friendsHere.length}</ThemedText>
           </View>
         )}
-      </View>
-    </Marker>
+      </Pressable>
+    </MarkerView>
   );
 }
 
 export function GymMapTab({ friends }: { friends: Friend[] }) {
-  const mapRef = useRef<MapView | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const cameraRef = useRef<Camera>(null);
+  const hasFittedGymsRef = useRef(false);
   const [locationGranted, setLocationGranted] = useState(false);
   const [selectedGym, setSelectedGym] = useState<Gym | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const scheme = useColorScheme();
+  const mapStyleUrl = getMapboxStyleURL(scheme);
 
   useEffect(() => {
+    if (!hasMapboxConfig) {
+      return;
+    }
+
+    let isMounted = true;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
+      if (isMounted && status === 'granted') {
         setLocationGranted(true);
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       }
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleGymPress = useCallback((gym: Gym) => {
@@ -69,28 +96,59 @@ export function GymMapTab({ friends }: { friends: Friend[] }) {
     setDrawerVisible(true);
   }, []);
 
-  const fitMapToGyms = useCallback(() => {
-    if (!mapRef.current) return;
-    mapRef.current.fitToCoordinates(
-      SINGAPORE_GYMS.map((gym) => ({ latitude: gym.latitude, longitude: gym.longitude })),
-      {
-        edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
-        animated: false,
+  const fitCameraToGyms = useCallback(() => {
+    if (!cameraRef.current || !GYM_BOUNDS) {
+      return;
+    }
+
+    cameraRef.current.setCamera({
+      bounds: {
+        ...GYM_BOUNDS,
+        ...MAP_PADDING,
       },
-    );
+      animationDuration: 0,
+    });
   }, []);
+
+  const handleMapLoaded = useCallback(() => {
+    if (hasFittedGymsRef.current) {
+      return;
+    }
+
+    hasFittedGymsRef.current = true;
+    fitCameraToGyms();
+  }, [fitCameraToGyms]);
+
+  if (!hasMapboxConfig) {
+    return (
+      <View style={styles.unavailableContainer}>
+        <ThemedText style={styles.unavailableTitle}>Mapbox token missing</ThemedText>
+        <ThemedText style={styles.unavailableSubtitle}>
+          Add `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` to `.env` and rebuild the native app to use the gym map.
+        </ThemedText>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.mapContainer}>
       <MapView
-        ref={mapRef}
         style={styles.map}
-        initialRegion={SINGAPORE_REGION}
-        onMapReady={fitMapToGyms}
-        showsUserLocation={locationGranted}
-        showsMyLocationButton={false}
-        userInterfaceStyle={scheme === 'dark' ? 'dark' : 'light'}
+        styleURL={mapStyleUrl}
+        logoEnabled
+        attributionEnabled
+        scaleBarEnabled={false}
+        compassEnabled={false}
+        onDidFinishLoadingMap={handleMapLoaded}
       >
+        <Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: SINGAPORE_CENTER,
+            zoomLevel: DEFAULT_ZOOM_LEVEL,
+          }}
+        />
+        {locationGranted ? <LocationPuck visible /> : null}
         {SINGAPORE_GYMS.map((gym) => (
           <GymMarker key={gym.id} gym={gym} friends={friends} onPress={handleGymPress} />
         ))}
@@ -113,12 +171,30 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+  unavailableContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  unavailableTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  unavailableSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
   customMarker: {
     width: 38,
     height: 38,
     borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 0,
     borderWidth: 2,
     borderColor: 'white',
     shadowColor: '#000',

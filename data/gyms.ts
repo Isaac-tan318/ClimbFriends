@@ -12,6 +12,17 @@ export const getGradesForGym = (gym: Gym): string[] | null => {
 };
 
 export const SINGAPORE_GYMS: Gym[] = [
+  // Background session test gym
+  {
+    id: 'test-tanah-merah-kechil-avenue',
+    name: '77 Tanah Merah Kechil Avenue (Test)',
+    brand: 'Test',
+    latitude: 1.33097863029277,
+    longitude: 103.946092597304,
+    radiusMeters: 100,
+    address: "77 Tanah Merah Kechil Avenue D'Manor, Singapore 465666",
+  },
+
   // Boulder+ Gyms
   {
     id: 'boulder-plus-aperia',

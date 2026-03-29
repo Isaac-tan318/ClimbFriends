@@ -23,6 +23,8 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
+The native gym map now uses Mapbox via `@rnmapbox/maps`, so Expo Go is not enough for iOS/Android map testing. Use a development build or EAS build for native map work.
+
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 ## Get a fresh project
@@ -66,8 +68,11 @@ This repo now includes a Supabase-first backend scaffold:
 2. Set:
    - `EXPO_PUBLIC_SUPABASE_URL`
    - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN`
 3. For scripts/functions also set:
    - `SUPABASE_SECRET_KEY`
+4. For native iOS/Android builds also set:
+   - `MAPBOX_DOWNLOADS_TOKEN`
 
 ### Feature flags
 
@@ -80,3 +85,9 @@ Use these environment flags during hybrid rollout:
 - `EXPO_PUBLIC_FEATURE_MESSAGES`
 - `EXPO_PUBLIC_FEATURE_NOTIFICATIONS`
 - `EXPO_PUBLIC_FEATURE_PRESENCE`
+
+### Native map builds
+
+- `@rnmapbox/maps` requires custom native code, so use a development build, `expo prebuild`, or EAS Build for native gym map testing.
+- Keep `MAPBOX_DOWNLOADS_TOKEN` out of source control and provide it as a local env var or EAS secret for native builds.
+- Web keeps the placeholder gym map implementation for now.
