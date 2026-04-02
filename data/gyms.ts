@@ -112,7 +112,7 @@ export const SINGAPORE_GYMS: Gym[] = [
     address: '2 Kallang Ave, #01-20 CT Hub, Singapore 339407',
   },
   {
-    id: 'bff-climb-tampines-yoha',
+    id: 'bff-climb-yoha',
     name: 'BFF Climb Tampines Yoha',
     brand: 'BFF Climb',
     latitude: 1.3434,
@@ -121,7 +121,7 @@ export const SINGAPORE_GYMS: Gym[] = [
     address: '6 Tampines St 92, #03-06 yo:HA Commercial, Singapore 528893',
   },
   {
-    id: 'bff-climb-tampines',
+    id: 'bff-climb-tampines-hub',
     name: 'BFF Climb Tampines Hub',
     brand: 'BFF Climb',
     latitude: 1.3540,

@@ -165,15 +165,21 @@ const handleExitRegionAsync = async (userId: string, gymId: string) => {
   const elapsedMs = Date.now() - activeSession.startedAt.getTime();
   console.log(`⏱️ [GEOFENCE EXIT] Dwell time was: ${elapsedMs}ms`);
 
-  if (elapsedMs < DWELL_REQUIREMENT_MS) {
-    console.log('🗑️ [GEOFENCE EXIT] Drive-by detected (Under 2 mins). Deleting ghost session.');
+  const hasLoggedClimbs = activeSession.climbs && activeSession.climbs.length > 0;
+
+  if (elapsedMs < DWELL_REQUIREMENT_MS && !hasLoggedClimbs) {
+    console.log('🗑️ [GEOFENCE EXIT] Drive-by detected (Under 2 mins) and no climbs logged. Deleting ghost session.');
     const deleteResult = await sessionService.deleteSession(activeSession.id);
     if (!deleteResult.ok) {
       console.warn('❌ [GEOFENCE EXIT] Failed to delete ghost session:', deleteResult.error.message);
       return;
     }
   } else {
-    console.log('✅ [GEOFENCE EXIT] Valid session. Ending normally.');
+    if (hasLoggedClimbs) {
+      console.log('✅ [GEOFENCE EXIT] Session has climbs. Ending normally despite short duration.');
+    } else {
+      console.log('✅ [GEOFENCE EXIT] Valid session (over 2 mins). Ending normally.');
+    }
     const endResult = await sessionService.endSession(activeSession.id);
     if (!endResult.ok) {
       console.warn('❌ [GEOFENCE EXIT] Failed to end session:', endResult.error.message);
@@ -201,8 +207,9 @@ const handleGymGeofencingEventAsync = async ({
 
   const userId = await resolveGeofencingUserIdAsync();
   if (!userId) {
-    console.warn('🛑 [GEOFENCE AUTH] No user logged in! Stopping background geofencing.');
-    await stopGymGeofencingAsync();
+    console.warn('⚠️ [GEOFENCE AUTH] No user logged in or session temporarily unavailable. Skipping event.');
+    // DO NOT stop geofencing here! It might just be a temporary storage lock or network issue.
+    // If we stop it, it never starts again until the user opens the app.
     return;
   }
   console.log(`👤 [GEOFENCE AUTH] User resolved: ${userId}`);
@@ -353,6 +360,8 @@ export const syncGymGeofencingAsync = async (input: {
     return ok({ enabled: true, running: false, promptedForPermissions: false, regions: [] });
   }
 
+  
+
   const regions = buildGymGeofencingRegions();
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
 
@@ -367,7 +376,7 @@ export const evaluateCurrentLocationAsync = async () => {
 
     // Grab a quick, single GPS ping
     const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: Location.Accuracy.High,
     });
 
     for (const gym of SINGAPORE_GYMS) {

@@ -10,28 +10,31 @@ set grades = excluded.grades;
 
 insert into public.gyms (id, name, brand, latitude, longitude, radius_meters, address)
 values
+  -- Background session test gym
+  ('test-home-gym', 'Home Base Testing', 'Test', 1.3312960, 103.9463520, 100, '77 Tanah Merah Kechil Avenue D''Manor, Singapore 465666'),
+
   -- Existing Gyms with custom radius
-  ('boulder-plus-aperia', 'Boulder+ Aperia', 'Boulder+', 1.3099000, 103.8642000, 15, '12 Kallang Ave, #03-17 Aperia Mall, Singapore 339511'),
-  ('boulder-plus-chevrons', 'Boulder+ The Chevrons', 'Boulder+', 1.3310000, 103.7483000, 50, '48 Boon Lay Way, #04-01 The Chevrons, Singapore 609961'),
-  ('boulder-planet-sembawang', 'Boulder Planet Sembawang', 'Boulder Planet', 1.4420000, 103.8251000, 30, '604 Sembawang Rd, #B1-22/23 Sembawang Shopping Centre, Singapore 758459'),
-  ('boulder-planet-taiseng', 'Boulder Planet Tai Seng', 'Boulder Planet', 1.3340000, 103.8884000, 15, '601 MacPherson Rd, #02-07 Grantral Mall, Singapore 368242'),
-  ('climb-central-kallang', 'Climb Central Kallang', 'Climb Central', 1.3027000, 103.8735000, 15, '1 Stadium Pl, #B1-01 Kallang Wave Mall, Singapore 397628'),
-  ('climb-central-funan', 'Climb Central Funan', 'Climb Central', 1.2914000, 103.8499000, 20, '107 North Bridge Rd, #B2-19/21 Funan, Singapore 179105'),
-  ('climb-central-novena', 'Climb Central Novena', 'Climb Central', 1.3204000, 103.8437000, 10, '238 Thomson Rd, #03-23/25 Velocity @ Novena Square, Singapore 307683'),
-  ('bff-climb-bendemeer', 'BFF Climb Bendemeer', 'BFF Climb', 1.3123000, 103.8632000, 25, '2 Kallang Ave, #01-20 CT Hub, Singapore 339407'),
-  ('fitbloc-depot', 'FitBloc Depot', 'FitBloc', 1.2813000, 103.8101000, 30, '108 Depot Rd, #02-01 Depot Heights Shopping Centre, Singapore 109670'),
-  ('fitbloc-maxwell', 'FitBloc Maxwell', 'FitBloc', 1.2794000, 103.8467000, 40, '7 Maxwell Rd, #06-01 MND Building Annexe B, Singapore 069111'),
-  ('lighthouse-climbing', 'Lighthouse Climbing', 'Lighthouse', 1.2750000, 103.7943000, 15, '44 Pasir Panjang Rd, #B-02, Singapore 118504'),
+  ('boulder-plus-aperia', 'Boulder+ Aperia', 'Boulder+', 1.3099000, 103.8642000, 100, '12 Kallang Ave, #03-17 Aperia Mall, Singapore 339511'),
+  ('boulder-plus-chevrons', 'Boulder+ The Chevrons', 'Boulder+', 1.3310000, 103.7483000, 100, '48 Boon Lay Way, #04-01 The Chevrons, Singapore 609961'),
+  ('boulder-planet-sembawang', 'Boulder Planet Sembawang', 'Boulder Planet', 1.4420000, 103.8251000, 100, '604 Sembawang Rd, #B1-22/23 Sembawang Shopping Centre, Singapore 758459'),
+  ('boulder-planet-taiseng', 'Boulder Planet Tai Seng', 'Boulder Planet', 1.3340000, 103.8884000, 100, '601 MacPherson Rd, #02-07 Grantral Mall, Singapore 368242'),
+  ('climb-central-kallang', 'Climb Central Kallang', 'Climb Central', 1.3027000, 103.8735000, 100, '1 Stadium Pl, #B1-01 Kallang Wave Mall, Singapore 397628'),
+  ('climb-central-funan', 'Climb Central Funan', 'Climb Central', 1.2914000, 103.8499000, 100, '107 North Bridge Rd, #B2-19/21 Funan, Singapore 179105'),
+  ('climb-central-novena', 'Climb Central Novena', 'Climb Central', 1.3204000, 103.8437000, 100, '238 Thomson Rd, #03-23/25 Velocity @ Novena Square, Singapore 307683'),
+  ('bff-climb-bendemeer', 'BFF Climb Bendemeer', 'BFF Climb', 1.3123000, 103.8632000, 100, '2 Kallang Ave, #01-20 CT Hub, Singapore 339407'),
+  ('fitbloc-depot', 'FitBloc Depot', 'FitBloc', 1.2813000, 103.8101000, 100, '108 Depot Rd, #02-01 Depot Heights Shopping Centre, Singapore 109670'),
+  ('fitbloc-maxwell', 'FitBloc Maxwell', 'FitBloc', 1.2794000, 103.8467000, 100, '7 Maxwell Rd, #06-01 MND Building Annexe B, Singapore 069111'),
+  ('lighthouse-climbing', 'Lighthouse Climbing', 'Lighthouse', 1.2750000, 103.7943000, 100, '44 Pasir Panjang Rd, #B-02, Singapore 118504'),
   
   -- Newly Added Gyms
-  ('climb-central-cck', 'Climb Central SAFRA Choa Chu Kang', 'Climb Central', 1.3887000, 103.7473000, 30, '28 Choa Chu Kang Dr, #03-02A SAFRA, Singapore 689964'),
-  ('bff-climb-yoha', 'BFF Climb Yoha', 'BFF Climb', 1.3434000, 103.9416000, 15, '6 Tampines St 92, #03-06 yo:HA Commercial, Singapore 528893'),
-  ('bff-climb-tampines-hub', 'BFF Climb Tampines Hub', 'BFF Climb', 1.3540000, 103.9403000, 30, '1 Tampines Walk, #02-81 Our Tampines Hub, Singapore 528523'),
-  ('fitbloc-sciencepark', 'FitBloc Science Park', 'FitBloc', 1.2878000, 103.7905000, 30, '87 Science Park Dr, #03-02 The Oasis, Singapore 118260'),
-  ('outpost-climbing', 'Outpost Climbing', 'Outpost', 1.3047000, 103.8622000, 30, '464 Crawford Ln, #01-464, Singapore 190464'),
-  ('climba-gym', 'Climba Gym', 'Climba', 1.2792000, 103.8493000, 30, '61 Robinson Rd, #05-03/04, Singapore 068893'),
-  ('oyeyo', 'OYEYO Boulder Home', 'Oyeyo', 1.3072000, 103.8468000, 30, '148 Mackenzie Rd, Singapore 228724'),
-  ('z-vertigo', 'Z-Vertigo Boulder Gym', 'Z-Vertigo', 1.3429000, 103.7762000, 30, '170 Upper Bukit Timah Rd, #B2-20B Bukit Timah Shopping Centre, Singapore 588179')
+  ('climb-central-cck', 'Climb Central SAFRA Choa Chu Kang', 'Climb Central', 1.3887000, 103.7473000, 100, '28 Choa Chu Kang Dr, #03-02A SAFRA, Singapore 689964'),
+  ('bff-climb-tampines-yoha', 'BFF Climb Tampines Yoha', 'BFF Climb', 1.3434000, 103.9416000, 100, '6 Tampines St 92, #03-06 yo:HA Commercial, Singapore 528893'),
+  ('bff-climb-tampines', 'BFF Climb Tampines Hub', 'BFF Climb', 1.3540000, 103.9403000, 100, '1 Tampines Walk, #02-81 Our Tampines Hub, Singapore 528523'),
+  ('fitbloc-sciencepark', 'FitBloc Science Park', 'FitBloc', 1.2878000, 103.7905000, 100, '87 Science Park Dr, #03-02 The Oasis, Singapore 118260'),
+  ('outpost-climbing', 'Outpost Climbing', 'Outpost', 1.3047000, 103.8622000, 100, '464 Crawford Ln, #01-464, Singapore 190464'),
+  ('climba-gym', 'Climba Gym', 'Climba', 1.2792000, 103.8493000, 100, '61 Robinson Rd, #05-03/04, Singapore 068893'),
+  ('oyeyo', 'OYEYO Boulder Home', 'Oyeyo', 1.3072000, 103.8468000, 100, '148 Mackenzie Rd, Singapore 228724'),
+  ('z-vertigo', 'Z-Vertigo Boulder Gym', 'Z-Vertigo', 1.3429000, 103.7762000, 100, '170 Upper Bukit Timah Rd, #B2-20B Bukit Timah Shopping Centre, Singapore 588179')
 on conflict (id) do update
 set
   name = excluded.name,

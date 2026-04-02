@@ -7,6 +7,24 @@ const upsertPlugin = (plugins, plugin) =>
 
 module.exports = () => {
   const config = appJson.expo;
+  const variant = process.env.APP_VARIANT ?? 'production';
+
+  const variantOptions = {
+    development: {
+      name: 'climbfriends (Dev)',
+      androidPackage: 'com.isaactan.climbfriends.dev',
+    },
+    preview: {
+      name: 'climbfriends (Preview)',
+      androidPackage: 'com.isaactan.climbfriends.preview',
+    },
+    production: {
+      name: config.name,
+      androidPackage: 'com.isaactan.climbfriends',
+    },
+  };
+
+  const resolvedVariant = variantOptions[variant] ?? variantOptions.production;
   const mapboxAccessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? null;
   const mapboxDownloadsToken = process.env.MAPBOX_DOWNLOADS_TOKEN ?? null;
 
@@ -28,6 +46,11 @@ module.exports = () => {
 
   return {
     ...config,
+    name: resolvedVariant.name,
     plugins: upsertPlugin(config.plugins, mapboxPlugin),
+    android: {
+      ...config.android,
+      package: resolvedVariant.androidPackage,
+    },
   };
 };

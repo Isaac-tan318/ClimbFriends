@@ -15,7 +15,7 @@ export const hasSupabaseConfig = Boolean(supabaseUrl && supabasePublishableKey);
 const authStorage = Platform.OS === 'web' ? undefined : AsyncStorage;
 const authLock = Platform.OS === 'web' ? undefined : processLock;
 
-// 🕵️ THE WIRETAP: Intercepts all Supabase network traffic
+// Intercepts all Supabase network traffic
 const customFetch = async (url: RequestInfo | URL, options?: RequestInit) => {
   console.log(`\n🌐 [NETWORK OUT] -> ${options?.method || 'GET'} ${url}`);
   try {
