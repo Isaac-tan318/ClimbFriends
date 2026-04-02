@@ -14,6 +14,13 @@ import { settingsService } from '@/services/settings/settings-service';
 import { useSessionStore } from '@/stores/session-store';
 
 export const GYM_GEOFENCING_TASK_NAME = 'gym-geofencing-task';
+export const KEEP_ALIVE_TASK_NAME = 'gym-keep-alive-task';
+
+if (!TaskManager.isTaskDefined(KEEP_ALIVE_TASK_NAME)) {
+  TaskManager.defineTask(KEEP_ALIVE_TASK_NAME, async () => {
+    // Dummy task for Android Foreground Service keep-alive
+  });
+}
 
 // --- ADD THIS MATH HELPER ---
 const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -293,7 +300,21 @@ export const registerGymGeofencingAsync = async (): Promise<
   }
 
   const regions = buildGymGeofencingRegions();
+
+  await stopGymGeofencingAsync();
+
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
+
+  if (Platform.OS === 'android') {
+    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME, {
+      accuracy: Location.Accuracy.Low,
+      distanceInterval: 500, // 500m
+      foregroundService: {
+        notificationTitle: 'ClimbFriends Active',
+        notificationBody: 'Automatic check-in is running.',
+      },
+    });
+  }
 
   console.log(`✅ [GEOFENCE REGISTRATION] Successfully registered ${regions.length} gyms with OS.`);
   return ok({ regions });
@@ -309,6 +330,14 @@ export const stopGymGeofencingAsync = async (): Promise<AppResult<void>> => {
     if (!isRunning) return ok(undefined);
 
     await Location.stopGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
+
+    if (Platform.OS === 'android') {
+      const isKeepAliveRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
+      if (isKeepAliveRunning) {
+        await Location.stopLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
+      }
+    }
+
     console.log('✅ [GEOFENCE CONTROL] Geofencing stopped.');
   } catch (error: any) {
     // If the OS throws "Not authorized", it means geofencing is definitely 
@@ -360,10 +389,21 @@ export const syncGymGeofencingAsync = async (input: {
     return ok({ enabled: true, running: false, promptedForPermissions: false, regions: [] });
   }
 
-  
+  await stopGymGeofencingAsync();
 
   const regions = buildGymGeofencingRegions();
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
+
+  if (Platform.OS === 'android') {
+    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME, {
+      accuracy: Location.Accuracy.Low,
+      distanceInterval: 500, // 500m
+      foregroundService: {
+        notificationTitle: 'ClimbFriends Active',
+        notificationBody: 'Automatic check-in is running.',
+      },
+    });
+  }
 
   return ok({ enabled: true, running: true, promptedForPermissions: false, regions });
 };
