@@ -1,26 +1,29 @@
-const appJson = require('./app.json');
-
+// app.config.js
 const MAPBOX_PLUGIN_NAME = '@rnmapbox/maps';
 
 const upsertPlugin = (plugins, plugin) =>
   [plugin, ...(plugins ?? []).filter((entry) => (Array.isArray(entry) ? entry[0] : entry) !== MAPBOX_PLUGIN_NAME)];
 
-module.exports = () => {
-  const config = appJson.expo;
+// EXPO PASSES THE PARSED app.json TO THIS FUNCTION VIA { config }
+module.exports = ({ config }) => {
   const variant = process.env.APP_VARIANT ?? 'production';
 
+  // Consolidate the identifier and add the unique scheme
   const variantOptions = {
     development: {
       name: 'climbfriends (Dev)',
-      androidPackage: 'com.isaactan.climbfriends.dev',
+      identifier: 'com.isaactan.climbfriends.dev', 
+      scheme: 'climbfriends-dev',
     },
     preview: {
       name: 'climbfriends (Preview)',
-      androidPackage: 'com.isaactan.climbfriends.preview',
+      identifier: 'com.isaactan.climbfriends.preview',
+      scheme: 'climbfriends-preview',
     },
     production: {
       name: config.name,
-      androidPackage: 'com.isaactan.climbfriends',
+      identifier: 'com.isaactan.climbfriends',
+      scheme: 'climbfriends',
     },
   };
 
@@ -47,10 +50,15 @@ module.exports = () => {
   return {
     ...config,
     name: resolvedVariant.name,
+    scheme: resolvedVariant.scheme, // 1. Dynamic Scheme applied
     plugins: upsertPlugin(config.plugins, mapboxPlugin),
+    ios: {
+      ...config.ios,
+      bundleIdentifier: resolvedVariant.identifier, // 2. iOS support added
+    },
     android: {
       ...config.android,
-      package: resolvedVariant.androidPackage,
+      package: resolvedVariant.identifier, // 3. Android package applied
     },
   };
 };
