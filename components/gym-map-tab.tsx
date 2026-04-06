@@ -5,10 +5,11 @@ import * as Location from 'expo-location';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedText } from '@/components/themed-text';
-import { GymDrawer, BRAND_COLORS } from '@/components/gym-drawer';
+import { GymDrawer, BRAND_COLORS, CROWDED_COLORS } from '@/components/gym-drawer';
 import { SINGAPORE_GYMS } from '@/data';
 import { getMapboxStyleURL, hasMapboxConfig } from '@/lib/mapbox';
-import { Gym, Friend } from '@/types';
+import { useGymOccupancy } from '@/hooks/use-gym-occupancy';
+import { Gym, Friend, GymOccupancy } from '@/types';
 
 type MapboxCoordinate = [number, number];
 
@@ -45,13 +46,34 @@ const getGymBounds = (gyms: Gym[]) => {
 
 const GYM_BOUNDS = getGymBounds(SINGAPORE_GYMS);
 
-function GymMarker({ gym, friends, onPress }: { gym: Gym; friends: Friend[]; onPress: (g: Gym) => void }) {
+function GymMarker({ 
+  gym, 
+  friends, 
+  occupancy, 
+  onPress 
+}: { 
+  gym: Gym; 
+  friends: Friend[]; 
+  occupancy: GymOccupancy | null;
+  onPress: (g: Gym) => void 
+}) {
   const brandColor = BRAND_COLORS[gym.brand] ?? '#6b7280';
   const friendsHere = friends.filter((f) => f.currentGymId === gym.id && f.isAtGym);
+  const occupancyColor = occupancy ? CROWDED_COLORS[occupancy.level] : 'white';
 
   return (
     <MarkerView coordinate={toMapboxCoordinate(gym)} allowOverlap allowOverlapWithPuck>
-      <Pressable onPress={() => onPress(gym)} style={[styles.customMarker, { backgroundColor: brandColor }]}>
+      <Pressable 
+        onPress={() => onPress(gym)} 
+        style={[
+          styles.customMarker, 
+          { 
+            backgroundColor: brandColor,
+            borderColor: occupancyColor,
+            borderWidth: occupancy ? 3 : 2
+          }
+        ]}
+      >
         <MaterialIcons name="fitness-center" size={16} color="white" />
         {friendsHere.length > 0 && (
           <View style={styles.markerBadge}>
@@ -71,6 +93,7 @@ export function GymMapTab({ friends }: { friends: Friend[] }) {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const scheme = useColorScheme();
   const mapStyleUrl = getMapboxStyleURL(scheme);
+  const { getGymOccupancy } = useGymOccupancy();
 
   useEffect(() => {
     if (!hasMapboxConfig) {
@@ -150,13 +173,20 @@ export function GymMapTab({ friends }: { friends: Friend[] }) {
         />
         {locationGranted ? <LocationPuck visible /> : null}
         {SINGAPORE_GYMS.map((gym) => (
-          <GymMarker key={gym.id} gym={gym} friends={friends} onPress={handleGymPress} />
+          <GymMarker 
+            key={gym.id} 
+            gym={gym} 
+            friends={friends} 
+            occupancy={getGymOccupancy(gym.id)}
+            onPress={handleGymPress} 
+          />
         ))}
       </MapView>
 
       <GymDrawer
         gym={selectedGym}
         friends={friends}
+        occupancy={selectedGym ? getGymOccupancy(selectedGym.id) : null}
         visible={drawerVisible}
         onClose={() => setDrawerVisible(false)}
       />

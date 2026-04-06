@@ -13,6 +13,14 @@ export interface Gym {
   walls?: string[];
 }
 
+export type GymCrowdedness = 'quiet' | 'moderate' | 'crowded';
+
+export interface GymOccupancy {
+  gymId: string;
+  count: number;
+  level: GymCrowdedness;
+}
+
 export interface LoggedClimb {
   id: string;
   sessionId: string;

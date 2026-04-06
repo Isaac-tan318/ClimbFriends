@@ -9,12 +9,18 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "development"
+      },
+      "android": {
+        "buildType": "apk" // add this
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "preview"
+      },
+      "android": {
+        "buildType": "apk" // add this
       }
     },
     "production": {

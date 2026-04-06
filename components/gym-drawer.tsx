@@ -19,7 +19,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Gym, Friend } from '@/types';
-import { AppColors } from '@/constants/theme';
+import { Gym, Friend, GymOccupancy } from '@/types';
 
 export const BRAND_COLORS: Record<string, string> = {
   'Boulder+': '#f97316',
@@ -34,17 +34,26 @@ export const BRAND_COLORS: Record<string, string> = {
   'Z-Vertigo': '#8b5cf6',
 };
 
+export const CROWDED_COLORS: Record<string, string> = {
+  quiet: '#22c55e',
+  moderate: '#eab308',
+  crowded: '#ef4444',
+};
+
 export function GymDrawer({
   gym,
   friends,
+  occupancy,
   visible,
   onClose,
 }: {
   gym: Gym | null;
   friends: Friend[];
+  occupancy: GymOccupancy | null;
   visible: boolean;
   onClose: () => void;
 }) {
+
   const modalBg = useThemeColor({}, 'background');
   const borderColor = useThemeColor({ light: '#e5e5e5', dark: '#333' }, 'background');
   const translateY = useSharedValue(600);
@@ -123,8 +132,18 @@ export function GymDrawer({
 
           {/* Gym header */}
           <View style={styles.drawerHeader}>
-            <View style={[styles.gymBrandBadge, { backgroundColor: brandColor }]}>
-              <ThemedText style={styles.gymBrandBadgeText}>{gym?.brand}</ThemedText>
+            <View style={styles.headerTopRow}>
+              <View style={[styles.gymBrandBadge, { backgroundColor: brandColor }]}>
+                <ThemedText style={styles.gymBrandBadgeText}>{gym?.brand}</ThemedText>
+              </View>
+              {occupancy && (
+                <View style={[styles.occupancyBadge, { backgroundColor: CROWDED_COLORS[occupancy.level] + '20' }]}>
+                  <View style={[styles.occupancyDot, { backgroundColor: CROWDED_COLORS[occupancy.level] }]} />
+                  <ThemedText style={[styles.occupancyText, { color: CROWDED_COLORS[occupancy.level] }]}>
+                    {occupancy.level.toUpperCase()} ({occupancy.count})
+                  </ThemedText>
+                </View>
+              )}
             </View>
             <ThemedText style={styles.drawerGymName}>{gym?.name}</ThemedText>
             <View style={styles.drawerAddressRow}>
@@ -218,12 +237,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   gymBrandBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    marginBottom: 10,
+  },
+  occupancyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 6,
+  },
+  occupancyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  occupancyText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
   gymBrandBadgeText: {
     color: 'white',
