@@ -8,7 +8,6 @@ import { CURRENT_USER, SINGAPORE_GYMS, getGymById } from '@/data';
 import { hasSupabaseConfig } from '@/lib/supabase';
 import { err, ok, type AppResult } from '@/services/api/result';
 import { getCurrentUserId } from '@/services/auth/current-user';
-import { presenceService } from '@/services/presence/presence-service';
 import { sessionService } from '@/services/sessions/session-service';
 import { settingsService } from '@/services/settings/settings-service';
 import { useSessionStore } from '@/stores/session-store';
@@ -119,11 +118,6 @@ const handleEnterRegionAsync = async (userId: string, gymId: string) => {
 
   if (activeSession?.gymId === gymId) {
     console.log('ℹ️ [GEOFENCE ENTER] Session already active for this gym. Updating presence only.');
-    await presenceService.updatePresence({
-      userId,
-      currentGymId: gymId,
-      isAtGym: true,
-    });
     return;
   }
 
@@ -142,12 +136,6 @@ const handleEnterRegionAsync = async (userId: string, gymId: string) => {
     console.warn('❌ [GEOFENCE ENTER] Failed to start session:', startResult.error.message);
     return;
   }
-
-  await presenceService.updatePresence({
-    userId,
-    currentGymId: gymId,
-    isAtGym: true,
-  });
 
   await refreshSessionStoreForActiveAppAsync();
 };
@@ -194,7 +182,6 @@ const handleExitRegionAsync = async (userId: string, gymId: string) => {
     }
   }
 
-  await presenceService.clearCheckIn(userId);
   await refreshSessionStoreForActiveAppAsync();
 };
 

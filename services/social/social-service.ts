@@ -15,11 +15,17 @@ type DbProfile = {
   created_at: string | null;
 };
 
-type DbLocation = {
+type DbActiveSession = {
   user_id: string;
-  current_gym_id: string | null;
-  last_seen_at: string | null;
-  is_at_gym: boolean;
+  gym_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  is_active: boolean;
+};
+
+type DbSettings = {
+  user_id: string;
+  friend_visibility_enabled: boolean | null;
 };
 
 type DbFriendship = {
@@ -49,15 +55,18 @@ type DbVisitInvite = {
   responded_at: string | null;
 };
 
-const mapFriend = (profile: DbProfile, location?: DbLocation): Friend => ({
+const mapFriend = (
+  profile: DbProfile,
+  presence?: { currentGymId: string | null; lastSeenAt: Date | null; isAtGym: boolean },
+): Friend => ({
   id: profile.id,
   email: profile.email ?? '',
   displayName: profile.display_name ?? 'Climber',
   avatarUrl: profile.avatar_url ?? undefined,
   createdAt: fromIsoOrNow(profile.created_at),
-  currentGymId: location?.current_gym_id ?? null,
-  lastSeenAt: fromIso(location?.last_seen_at),
-  isAtGym: location?.is_at_gym ?? false,
+  currentGymId: presence?.currentGymId ?? null,
+  lastSeenAt: presence?.lastSeenAt ?? null,
+  isAtGym: presence?.isAtGym ?? false,
 });
 
 const mapInvite = (row: DbVisitInvite): VisitInvite => ({
@@ -221,22 +230,56 @@ export const socialService = {
       return err(profileError.message, profileError.code, profileError);
     }
 
-    const { data: locations, error: locationError } = await client
-      .from('user_locations')
-      .select('user_id,current_gym_id,last_seen_at,is_at_gym')
+    const { data: settingsRows, error: settingsError } = await client
+      .from('user_settings')
+      .select('user_id,friend_visibility_enabled')
       .in('user_id', friendIds);
 
-    if (locationError) {
-      return err(locationError.message, locationError.code, locationError);
+    if (settingsError) {
+      return err(settingsError.message, settingsError.code, settingsError);
     }
 
-    const locationMap = new Map<string, DbLocation>(
-      ((locations ?? []) as DbLocation[]).map((location) => [location.user_id, location]),
-    );
+    const visibilityMap = new Map<string, boolean>();
+    ((settingsRows ?? []) as DbSettings[]).forEach((row) => {
+      visibilityMap.set(row.user_id, row.friend_visibility_enabled ?? true);
+    });
+
+    let activeSessionsRows: DbActiveSession[] = [];
+    const { data: activeSessions, error: sessionError } = await client.rpc('active_sessions_for_users', {
+      friend_ids: friendIds,
+    });
+
+    if (sessionError) {
+      const { data: fallbackSessions, error: fallbackError } = await client
+        .from('climbing_sessions')
+        .select('user_id,gym_id,started_at,ended_at,is_active')
+        .in('user_id', friendIds)
+        .eq('is_active', true);
+
+      if (fallbackError) {
+        return err(fallbackError.message, fallbackError.code, fallbackError);
+      }
+      activeSessionsRows = (fallbackSessions ?? []) as DbActiveSession[];
+    } else {
+      activeSessionsRows = (activeSessions ?? []) as DbActiveSession[];
+    }
+
+    const presenceMap = new Map<string, { currentGymId: string | null; lastSeenAt: Date | null; isAtGym: boolean }>();
+    activeSessionsRows.forEach((row) => {
+      if (!row.user_id) return;
+      const isVisible = visibilityMap.get(row.user_id) ?? true;
+      if (!isVisible) return;
+      if (!row.is_active) return;
+      presenceMap.set(row.user_id, {
+        currentGymId: row.gym_id ?? null,
+        lastSeenAt: fromIsoOrNow(row.started_at),
+        isAtGym: true,
+      });
+    });
 
     return ok(
       ((profiles ?? []) as DbProfile[]).map((profile) =>
-        mapFriend(profile, locationMap.get(profile.id)),
+        mapFriend(profile, presenceMap.get(profile.id)),
       ),
     );
   },

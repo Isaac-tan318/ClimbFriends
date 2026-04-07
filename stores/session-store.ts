@@ -6,7 +6,6 @@ import { hasSupabaseConfig } from '@/lib/supabase';
 import type { ClimbingSession, LoggedClimb, UserStats } from '@/types';
 import { getCurrentUserId } from '@/services/auth/current-user';
 import { err, ok, type AppResult } from '@/services/api/result';
-import { presenceService } from '@/services/presence/presence-service';
 import { deriveUserStats } from '@/services/sessions/session-stats';
 import { sessionService } from '@/services/sessions/session-service';
 
@@ -189,12 +188,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       },
     }));
 
-    void presenceService.updatePresence({
-      userId,
-      currentGymId: gymId,
-      isAtGym: true,
-    });
-
     return ok(result.data);
   },
 
@@ -228,8 +221,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         source: useMockSessions ? 'mock' : 'supabase',
       },
     }));
-
-    void presenceService.clearCheckIn(userId);
 
     return ok(result.data);
   },

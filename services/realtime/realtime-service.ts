@@ -1,6 +1,6 @@
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { supabase } from '@/lib/supabase';
-import type { Message, Notification, UserPresence } from '@/types';
+import type { Message, Notification } from '@/types';
 
 import { fromIso, fromIsoOrNow } from '@/services/api/date';
 
@@ -24,14 +24,20 @@ const mapNotification = (payload: Record<string, unknown>): Notification => ({
   createdAt: fromIsoOrNow((payload.created_at as string | null) ?? null),
 });
 
-const mapPresence = (payload: Record<string, unknown>): UserPresence => ({
+type SessionPresence = {
+  userId: string;
+  gymId: string | null;
+  isActive: boolean;
+  startedAt: Date | null;
+  endedAt: Date | null;
+};
+
+const mapSessionPresence = (payload: Record<string, unknown>): SessionPresence => ({
   userId: String(payload.user_id),
-  currentGymId: (payload.current_gym_id as string | null) ?? null,
-  isAtGym: Boolean(payload.is_at_gym),
-  lastSeenAt: fromIso((payload.last_seen_at as string | null) ?? null),
-  latitude: (payload.latitude as number | null) ?? undefined,
-  longitude: (payload.longitude as number | null) ?? undefined,
-  updatedAt: fromIsoOrNow((payload.updated_at as string | null) ?? null),
+  gymId: (payload.gym_id as string | null) ?? null,
+  isActive: Boolean(payload.is_active),
+  startedAt: fromIsoOrNow((payload.started_at as string | null) ?? null),
+  endedAt: fromIso((payload.ended_at as string | null) ?? null),
 });
 
 export const realtimeService = {
@@ -88,22 +94,27 @@ export const realtimeService = {
     };
   },
 
-  subscribeToPresence(onPresence: (presence: UserPresence) => void): () => void {
-    if (!supabase || !FEATURE_FLAGS.useSupabasePresence) return () => undefined;
+  subscribeToActiveSessions(userIds: string[], onChange: (presence: SessionPresence) => void): () => void {
+    if (!supabase || !FEATURE_FLAGS.useSupabaseSessions) return () => undefined;
+    const ids = userIds.filter(Boolean);
+    if (ids.length === 0) return () => undefined;
     const client = supabase;
 
+    const filterValues = ids.map((id) => `"${id}"`).join(',');
+    const filter = `user_id=in.(${filterValues})`;
     const channel = client
-      .channel('presence:user_locations')
+      .channel(`sessions:${ids.length}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'user_locations',
+          table: 'climbing_sessions',
+          filter,
         },
         (payload) => {
           const row = (payload.new ?? payload.old) as Record<string, unknown>;
-          if (row) onPresence(mapPresence(row));
+          if (row) onChange(mapSessionPresence(row));
         },
       )
       .subscribe();

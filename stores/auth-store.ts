@@ -3,7 +3,6 @@ import { create } from 'zustand';
 import type { User } from '@/types';
 import { authService } from '@/services/auth/auth-service';
 import { err, ok, type AppResult } from '@/services/api/result';
-import { presenceService } from '@/services/presence/presence-service';
 import { useNotificationStore } from '@/stores/notifications-store';
 import { useSessionStore } from '@/stores/session-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -103,10 +102,6 @@ initialize: async () => {
     if (!result.ok) {
       set({ loading: false, error: result.error.message });
       return err(result.error.message, result.error.code, result.error.details);
-    }
-
-    if (currentUser?.id) {
-      void presenceService.clearCheckIn(currentUser.id);
     }
 
     useSessionStore.getState().resetForSignedOut();

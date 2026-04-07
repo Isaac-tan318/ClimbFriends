@@ -47,7 +47,7 @@ interface SocialState {
 const DEFAULT_USER_ID = 'user-1';
 const useMockSocial = !hasSupabaseConfig || !FEATURE_FLAGS.useSupabaseSocial;
 
-let presenceUnsubscribe: (() => void) | null = null;
+let sessionsUnsubscribe: (() => void) | null = null;
 
 const resolveUserId = async (): Promise<string | null> => {
   const userId = await getCurrentUserId();
@@ -85,9 +85,9 @@ export const useSocialStore = create<SocialState>((set, get) => ({
 
     const userId = await resolveUserId();
     if (!userId) {
-      if (presenceUnsubscribe) {
-        presenceUnsubscribe();
-        presenceUnsubscribe = null;
+      if (sessionsUnsubscribe) {
+        sessionsUnsubscribe();
+        sessionsUnsubscribe = null;
       }
       set({
         friends: [],
@@ -136,21 +136,22 @@ export const useSocialStore = create<SocialState>((set, get) => ({
     });
 
     if (friendsResult.ok) {
-      if (presenceUnsubscribe) {
-        presenceUnsubscribe();
-        presenceUnsubscribe = null;
+      if (sessionsUnsubscribe) {
+        sessionsUnsubscribe();
+        sessionsUnsubscribe = null;
       }
 
       if (!useMockSocial) {
-        presenceUnsubscribe = realtimeService.subscribeToPresence((presence) => {
+        const friendIds = (friendsResult.data ?? []).map((friend) => friend.id);
+        sessionsUnsubscribe = realtimeService.subscribeToActiveSessions(friendIds, (presence) => {
           set((state) => ({
             friends: state.friends.map((friend) =>
               friend.id === presence.userId
                 ? {
                     ...friend,
-                    currentGymId: presence.currentGymId,
-                    isAtGym: presence.isAtGym,
-                    lastSeenAt: presence.lastSeenAt,
+                    currentGymId: presence.isActive ? presence.gymId : null,
+                    isAtGym: presence.isActive && Boolean(presence.gymId),
+                    lastSeenAt: presence.isActive ? presence.startedAt ?? new Date() : presence.endedAt ?? new Date(),
                   }
                 : friend,
             ),
@@ -365,9 +366,9 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   },
 
   resetForSignedOut: () => {
-    if (presenceUnsubscribe) {
-      presenceUnsubscribe();
-      presenceUnsubscribe = null;
+    if (sessionsUnsubscribe) {
+      sessionsUnsubscribe();
+      sessionsUnsubscribe = null;
     }
 
     set({

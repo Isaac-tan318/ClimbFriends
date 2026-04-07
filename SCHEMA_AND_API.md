@@ -150,6 +150,14 @@ Real-time user location/gym presence. Currently modeled as fields on `Friend` (`
 
 > This table is better suited as a **real-time presence system** (e.g. via WebSockets or polling) rather than standard REST. See API routes section.
 
+**Deprecation note:** Presence is now derived from active `climbing_sessions` instead of storing coordinates. The app no longer reads or writes this table when `useSupabasePresence` is false.
+
+**Helper RPC / View**
+
+`active_sessions_for_users(friend_ids uuid[])` → `user_id, gym_id, started_at, ended_at, is_active`  
+Returns only rows where `is_active = true` for the supplied friend IDs. Backed by index:
+`CREATE INDEX IF NOT EXISTS idx_sessions_active_user_started_at ON climbing_sessions (is_active, user_id, started_at DESC);`
+
 ---
 
 ### `planned_visits`

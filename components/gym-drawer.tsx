@@ -18,8 +18,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Gym, Friend } from '@/types';
 import { Gym, Friend, GymOccupancy } from '@/types';
+import { AppColors } from '@/constants/theme';
 
 export const BRAND_COLORS: Record<string, string> = {
   'Boulder+': '#f97316',

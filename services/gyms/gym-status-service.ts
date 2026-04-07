@@ -35,8 +35,8 @@ export const gymStatusService = {
   },
 
   /**
-   * Subscribes to changes in user_locations to know when to refresh occupancy.
-   * Note: For efficiency, we don't stream the counts, we just notify the caller 
+   * Subscribes to changes in climbing_sessions (active flag) to know when to refresh occupancy.
+   * Note: For efficiency, we don't stream the counts, we just notify the caller
    * that they should re-fetch getOccupancy().
    */
   subscribeToPresenceChanges(onUpdate: () => void) {
@@ -50,7 +50,7 @@ export const gymStatusService = {
         {
           event: '*',
           schema: 'public',
-          table: 'user_locations',
+          table: 'climbing_sessions',
         },
         () => {
           onUpdate();

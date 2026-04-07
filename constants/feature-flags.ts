@@ -13,7 +13,8 @@ export const FEATURE_FLAGS = {
   useSupabaseSocial: true,
   useSupabaseMessages: readBool(process.env.EXPO_PUBLIC_FEATURE_MESSAGES, true),
   useSupabaseNotifications: readBool(process.env.EXPO_PUBLIC_FEATURE_NOTIFICATIONS, true),
-  useSupabasePresence: readBool(process.env.EXPO_PUBLIC_FEATURE_PRESENCE, true),
+  // Presence storage is deprecated; keep opt-in but default OFF to prevent location writes.
+  useSupabasePresence: readBool(process.env.EXPO_PUBLIC_FEATURE_PRESENCE, false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;
