@@ -1,4 +1,4 @@
-import { AppState, Platform } from 'react-native';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -84,6 +84,80 @@ const isGeofencingSupportedAsync = async (): Promise<boolean> => {
     return false;
   }
   return TaskManager.isAvailableAsync();
+};
+
+const ensureAndroidNotificationPermissionAsync = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android' || Platform.Version < 33) {
+    return true;
+  }
+
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  if (!permission) {
+    return true;
+  }
+
+  const alreadyGranted = await PermissionsAndroid.check(permission);
+  if (alreadyGranted) {
+    return true;
+  }
+
+  const result = await PermissionsAndroid.request(permission);
+  return result === PermissionsAndroid.RESULTS.GRANTED;
+};
+
+const FOREGROUND_SERVICE_OPTIONS = {
+  accuracy: Location.Accuracy.Low,
+  distanceInterval: 500,
+  foregroundService: {
+    notificationTitle: 'ClimbFriends Active',
+    notificationBody: 'Automatic check-in is running.',
+    killServiceOnDestroy: false,
+  },
+} as const;
+
+const startKeepAliveForegroundServiceAsync = async (): Promise<void> => {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+
+  await ensureAndroidNotificationPermissionAsync();
+
+  try {
+    const alreadyRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
+    if (alreadyRunning) {
+      console.log('ℹ️ [FG SERVICE] Keep-alive foreground service already running. Skipping start.');
+      return;
+    }
+
+    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME, FOREGROUND_SERVICE_OPTIONS);
+    console.log('✅ [FG SERVICE] Keep-alive foreground service started.');
+  } catch (error: any) {
+    console.warn(
+      '❌ [FG SERVICE] Failed to start keep-alive foreground service:',
+      error?.code ?? '(no code)',
+      error?.message ?? error,
+    );
+  }
+};
+
+const stopKeepAliveForegroundServiceAsync = async (): Promise<void> => {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+
+  try {
+    const isRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
+    if (isRunning) {
+      await Location.stopLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
+      console.log('🛑 [FG SERVICE] Keep-alive foreground service stopped.');
+    }
+  } catch (error: any) {
+    console.warn(
+      '⚠️ [FG SERVICE] Failed to stop keep-alive foreground service:',
+      error?.code ?? '(no code)',
+      error?.message ?? error,
+    );
+  }
 };
 
 const resolveGeofencingUserIdAsync = async (): Promise<string | null> => {
@@ -273,6 +347,11 @@ export const requestGymGeofencingPermissionsAsync = async (): Promise<
     return err('Background permission denied.', 'BACKGROUND_PERMISSION_DENIED', background);
   }
 
+  // Required on Android 13+ for the foreground-service notification to actually display.
+  // Foreground service still runs without it, but with no visible indicator the keep-alive
+  // looks broken to the user and OEM battery managers are more likely to reap the process.
+  await ensureAndroidNotificationPermissionAsync();
+
   return ok({ foreground, background });
 };
 
@@ -292,16 +371,7 @@ export const registerGymGeofencingAsync = async (): Promise<
 
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
 
-  if (Platform.OS === 'android') {
-    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME, {
-      accuracy: Location.Accuracy.Low,
-      distanceInterval: 500, // 500m
-      foregroundService: {
-        notificationTitle: 'ClimbFriends Active',
-        notificationBody: 'Automatic check-in is running.',
-      },
-    });
-  }
+  await startKeepAliveForegroundServiceAsync();
 
   console.log(`✅ [GEOFENCE REGISTRATION] Successfully registered ${regions.length} gyms with OS.`);
   return ok({ regions });
@@ -318,12 +388,7 @@ export const stopGymGeofencingAsync = async (): Promise<AppResult<void>> => {
 
     await Location.stopGeofencingAsync(GYM_GEOFENCING_TASK_NAME);
 
-    if (Platform.OS === 'android') {
-      const isKeepAliveRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
-      if (isKeepAliveRunning) {
-        await Location.stopLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME);
-      }
-    }
+    await stopKeepAliveForegroundServiceAsync();
 
     console.log('✅ [GEOFENCE CONTROL] Geofencing stopped.');
   } catch (error: any) {
@@ -336,7 +401,15 @@ export const stopGymGeofencingAsync = async (): Promise<AppResult<void>> => {
 
 };
 
-export const syncGymGeofencingAsync = async (input: {
+// Module-level lock that serializes sync calls. The bootstrap hook and the
+// toggle handler can both trigger syncGymGeofencingAsync at the same time
+// (e.g. during permission prompts, AppState bounces from inactive→active and
+// fires the bootstrap listener while the toggle's registration is still
+// in flight). Without this lock, an in-flight register can race a stop and
+// leave geofencing unregistered.
+let pendingSyncPromise: Promise<unknown> | null = null;
+
+const runSyncGymGeofencingAsync = async (input: {
   enabled: boolean;
   promptForPermissions: boolean;
 }): Promise<AppResult<GymGeofencingSyncResult>> => {
@@ -381,18 +454,36 @@ export const syncGymGeofencingAsync = async (input: {
   const regions = buildGymGeofencingRegions();
   await Location.startGeofencingAsync(GYM_GEOFENCING_TASK_NAME, regions);
 
-  if (Platform.OS === 'android') {
-    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK_NAME, {
-      accuracy: Location.Accuracy.Low,
-      distanceInterval: 500, // 500m
-      foregroundService: {
-        notificationTitle: 'ClimbFriends Active',
-        notificationBody: 'Automatic check-in is running.',
-      },
-    });
-  }
+  await startKeepAliveForegroundServiceAsync();
 
   return ok({ enabled: true, running: true, promptedForPermissions: false, regions });
+};
+
+export const syncGymGeofencingAsync = async (input: {
+  enabled: boolean;
+  promptForPermissions: boolean;
+}): Promise<AppResult<GymGeofencingSyncResult>> => {
+  // Wait for any in-flight sync to settle. We swallow its rejection here so
+  // a previous failure doesn't poison subsequent calls.
+  const previous = pendingSyncPromise;
+  if (previous) {
+    console.log('⏳ [GEOFENCE SYNC] Waiting for previous sync to settle...');
+    try {
+      await previous;
+    } catch {
+      // ignore
+    }
+  }
+
+  const promise = runSyncGymGeofencingAsync(input);
+  pendingSyncPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    if (pendingSyncPromise === promise) {
+      pendingSyncPromise = null;
+    }
+  }
 };
 
 export const evaluateCurrentLocationAsync = async () => {

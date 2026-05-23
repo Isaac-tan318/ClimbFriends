@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\isaac\\\\OneDrive\\\\Desktop\\\\ClimbFriends\" log --oneline -10)",
+      "Bash(git -C \"C:\\\\Users\\\\isaac\\\\OneDrive\\\\Desktop\\\\ClimbFriends\" show 54a0639 -- services/geofencing/gym-geofencing.ts)"
+    ]
+  }
+}
